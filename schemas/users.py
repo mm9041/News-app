@@ -12,11 +12,16 @@ class UserRequest(BaseModel):
 class UserInfoBase(BaseModel):
     """
     用户信息基础数据模型
+
+    ⚠️ 这里的字段必须覆盖所有「前端需要回显」的列。
+    漏掉一个（比如 phone）不会报错，只会表现为「保存成功但不生效」：
+    库里写进去了，响应里没这个字段，前端拿到 undefined 就永远显示为空。
     """
     nickname: Optional[str] = Field(None, max_length=50, description="昵称")
     avatar: Optional[str] = Field(None, max_length=255, description="头像URL")
     gender: Optional[str] = Field(None, max_length=10, description="性别")
     bio: Optional[str] = Field(None, max_length=500, description="个人简介")
+    phone: Optional[str] = Field(None, max_length=20, description="手机号")
 
 
 class UserInfoResponse(UserInfoBase):
