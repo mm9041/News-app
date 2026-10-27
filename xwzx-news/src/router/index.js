@@ -138,7 +138,15 @@ const routes = [
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes
+  routes,
+  // 单页应用切路由时浏览器不会自动回到顶部，必须显式声明。
+  // 不配这个的典型症状：首页滚到一半点进详情，详情页直接停在中间。
+  scrollBehavior(to, from, savedPosition) {
+    // 浏览器前进/后退（含 router.back()）时恢复原来的位置
+    if (savedPosition) return savedPosition
+    // 其余跳转一律回顶部
+    return { top: 0 }
+  }
 })
 
 // 全局前置守卫
