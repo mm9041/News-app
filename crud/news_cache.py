@@ -92,6 +92,7 @@ def _dump_news(news: News) -> dict:
         "author": news.author,
         "category_id": news.category_id,
         "user_id": news.user_id,
+        "source_id": news.source_id,
         "views": news.views,
         "publish_time": news.publish_time.isoformat() if news.publish_time else None,
         "created_at": news.created_at.isoformat() if news.created_at else None,
