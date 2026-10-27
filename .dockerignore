@@ -1,12 +1,36 @@
+# 开发环境（不进入运行镜像）
 .venv
 __pycache__
 *.pyc
 *.pyo
+.pytest_cache
+tests
+pytest.ini
+requirements-dev.txt
+files
+
+# 版本控制与编辑器
 .git
 .gitignore
+.gitattributes
 .idea
 .workbuddy
+
+# 运行时产物
 uploads
-tests
+*.log
+
+# 前端单独构建
 xwzx-news
+
+# 文档与容器描述文件
 README.md
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# 绝对不能进镜像：里面有数据库密码和 AI Key。
+# 容器里的配置一律由 compose 的 environment 注入。
+.env
+.env.*
+!.env.example
