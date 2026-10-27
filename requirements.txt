@@ -1,0 +1,16 @@
+# 运行时依赖。版本取自 2026-10-27 项目 .venv 的实测值，保证换机可复现。
+# 安装：python -m pip install -r requirements.txt
+#
+# 说明：
+# - 用原生 bcrypt 而不是 passlib（passlib 与 bcrypt 5.x 版本不兼容，见 README）
+# - PyMySQL 不用单列：aiomysql 依赖它，会自动装上
+# - 不装 watchfiles，所以 `uvicorn --reload` 走的是轮询模式（较慢但可用）
+fastapi==0.141.1
+uvicorn==0.53.0
+SQLAlchemy==2.0.54
+aiomysql==0.3.2
+redis==8.1.0
+httpx==0.28.1
+pydantic==2.13.5
+python-dotenv==1.2.3
+bcrypt==5.0.0

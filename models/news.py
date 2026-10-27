@@ -1,0 +1,47 @@
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import DateTime, Integer, String, Index, ForeignKey, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
+from models.base import Base, TimestampMixin, UnsignedInt
+
+
+class Category(Base, TimestampMixin):
+    __tablename__ = "news_category"
+    # 与 database.sql 的 `name_UNIQUE` 对齐（原来只写了列上 unique=True，
+    # 约束没有名字，和库里的索引名对不上）
+    __table_args__ = (
+        UniqueConstraint("name", name="name_UNIQUE"),
+    )
+    id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="分类ID")
+    name: Mapped[str] = mapped_column(String(50), nullable=False, comment="分类名称")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False, comment="排序顺序")
+
+    def __repr__(self):
+        return f"<Category(id={self.id}, name={self.name}, sort_order={self.sort_order})>"
+
+
+class News(Base, TimestampMixin):
+    __tablename__ = "news"
+    __table_args__ = (
+        # 添加索引，提升查询速度
+        Index("fk_news_category_idx", "category_id"),  # 分类ID外键索引
+        Index("idx_publish_time", "publish_time"),  # 发布时间索引
+        # 列表接口的「分类 + 发布时间倒序 + id 倒序」联合索引。
+        # ⚠️ 方向信息写在 database.sql 里（`publish_time DESC, id DESC`），
+        # metadata 里只声明列，避免 create_all 与手工 DDL 打架。
+        Index("idx_category_publish", "category_id", "publish_time", "id"),
+    )
+    id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="新闻ID")
+    title: Mapped[str] = mapped_column(String(255), nullable=False, comment="新闻标题")
+    description: Mapped[Optional[str]] = mapped_column(String(500), comment="新闻描述")
+    content: Mapped[str] = mapped_column(Text, nullable=False, comment="新闻内容")
+    image: Mapped[Optional[str]] = mapped_column(String(255), comment="新闻图片")
+    author: Mapped[Optional[str]] = mapped_column(String(50), comment="作者")
+    category_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("news_category.id"), nullable=False, comment="分类ID")
+    views: Mapped[int] = mapped_column(UnsignedInt, default=0, nullable=False, comment="浏览次数")
+    publish_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="发布时间")
+
+    def __repr__(self):
+        return f"<News(id={self.id}, title={self.title}, views={self.views})>"
