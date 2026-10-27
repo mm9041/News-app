@@ -1,0 +1,12 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+.idea
+.workbuddy
+uploads
+tests
+xwzx-news
+README.md

@@ -41,7 +41,20 @@
             maxlength="50"
             placeholder="评论和留言里显示这个名字"
           />
-          <van-field v-model="form.avatar" label="头像" placeholder="图片 URL" />
+          <van-field v-model="form.avatar" label="头像" placeholder="图片 URL，或点右侧上传">
+            <template #button>
+              <van-button size="small" type="primary" plain :loading="uploading" @click="pickImage">
+                上传
+              </van-button>
+            </template>
+          </van-field>
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/*"
+            style="display: none"
+            @change="onFileChange"
+          />
           <van-field
             v-model="form.genderText"
             label="性别"
@@ -83,6 +96,7 @@ import { ref, computed, h, onMounted } from 'vue';
 import { useUserStore } from '../store/user';
 import { showDialog, showToast, showLoadingToast, showSuccessToast, showFailToast } from 'vant';
 import { useRouter } from 'vue-router';
+import { uploadImage } from '../api/upload';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -142,6 +156,8 @@ const genderText = computed(() => GENDER_LABELS[userStore.userInfo?.gender] || '
 const showEditor = ref(false);
 const showGenderPicker = ref(false);
 const saving = ref(false);
+const uploading = ref(false);
+const fileInput = ref(null);
 const form = ref({
   nickname: '',
   avatar: '',
@@ -172,6 +188,24 @@ const onGenderConfirm = ({ selectedOptions }) => {
     form.value.genderText = option.text;
   }
   showGenderPicker.value = false;
+};
+
+const pickImage = () => fileInput.value?.click();
+
+const onFileChange = async event => {
+  const file = event.target.files?.[0];
+  event.target.value = '';   // 允许连续选同一个文件
+  if (!file) return;
+
+  uploading.value = true;
+  try {
+    form.value.avatar = await uploadImage(file);
+    showSuccessToast('上传成功');
+  } catch (error) {
+    showFailToast(error.message || '上传失败');
+  } finally {
+    uploading.value = false;
+  }
 };
 
 const saveProfile = async () => {

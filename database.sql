@@ -59,12 +59,14 @@ CREATE TABLE IF NOT EXISTS `news` (
   `image` VARCHAR(255) NULL DEFAULT NULL COMMENT '封面图片URL',
   `author` VARCHAR(50) NULL DEFAULT NULL COMMENT '作者',
   `category_id` INT UNSIGNED NOT NULL COMMENT '分类ID',
+  `user_id` INT UNSIGNED NULL DEFAULT NULL COMMENT '发布者ID（后台创建的新闻才有）',
   `views` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '浏览量',
   `publish_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发布时间',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   INDEX `fk_news_category_idx` (`category_id` ASC),
+  INDEX `fk_news_user_idx` (`user_id` ASC),
   INDEX `idx_publish_time` (`publish_time` DESC),
   INDEX `idx_category_publish` (`category_id` ASC, `publish_time` DESC, `id` DESC),
   -- 中文全文检索：ngram 分词器（MySQL 8 内置），ngram_token_size 默认 2，
@@ -74,10 +76,14 @@ CREATE TABLE IF NOT EXISTS `news` (
     FOREIGN KEY (`category_id`)
     REFERENCES `news_category` (`id`)
     ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_news_user`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `user` (`id`)
+    ON DELETE SET NULL
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='新闻表';
 
--- 相关新闻关联表（推荐系统）
 -- 收藏表
 CREATE TABLE IF NOT EXISTS `favorite` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '收藏ID',
@@ -625,3 +631,35 @@ INSERT INTO `news` (`title`, `description`, `content`, `image`, `author`, `categ
 -- ⚠️ 这是弱密码，仅供本地调试；任何对外部署前都必须改掉。
 INSERT INTO `user` (`username`, `password`, `nickname`, `gender`, `bio`, `is_admin`) VALUES 
 ('admin', '$2b$12$KqaA/gs.RAhrLEVZkDykRuJqw1G/H9TJq3FQ3XB0ZCQpFhDlKoKay', 'admin', 'unknown', '这是一个管理员账号', 1);
+-- ----------------------------
+-- 消息通知表
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `notification` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '通知ID',
+  `user_id` INT UNSIGNED NOT NULL COMMENT '接收者ID',
+  `actor_id` INT UNSIGNED NOT NULL COMMENT '触发者ID',
+  `type` VARCHAR(20) NOT NULL COMMENT '类型：comment / like',
+  `news_id` INT UNSIGNED NOT NULL COMMENT '相关新闻ID',
+  `comment_id` INT UNSIGNED NULL DEFAULT NULL COMMENT '相关评论ID',
+  `is_read` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_notification_user` (`user_id` ASC, `is_read` ASC, `created_at` DESC, `id` DESC),
+  INDEX `fk_notification_actor_idx` (`actor_id` ASC),
+  INDEX `fk_notification_news_idx` (`news_id` ASC),
+  CONSTRAINT `fk_notification_user`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `user` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_notification_actor`
+    FOREIGN KEY (`actor_id`)
+    REFERENCES `user` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_notification_news`
+    FOREIGN KEY (`news_id`)
+    REFERENCES `news` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息通知表';

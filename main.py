@@ -1,16 +1,20 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from cache import view_counter
 from crud.news_views import flush_view_deltas
-from routers import news, users, favorite, history, ai, admin, comment
+from routers import news, users, favorite, history, ai, admin, comment, upload, notification
 from utils.exception_handlers import register_exception_handlers
 from utils.logger import get_logger, setup_logging
 from utils.middleware import RequestIdMiddleware
+
+BASE_DIR = Path(__file__).resolve().parent
 
 # 上面 import config 时 .env 已经加载，这里读 LOG_LEVEL 才拿得到
 setup_logging(os.getenv("LOG_LEVEL", "INFO"))
@@ -103,3 +107,10 @@ app.include_router(history.router)
 app.include_router(ai.router)
 app.include_router(admin.router)
 app.include_router(comment.router)
+app.include_router(upload.router)
+app.include_router(notification.router)
+
+# 上传的图片直接由 FastAPI 托管；生产环境应该换成 nginx / 对象存储
+UPLOAD_ROOT = BASE_DIR / "uploads"
+UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")

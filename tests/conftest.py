@@ -107,6 +107,10 @@ def admin_user(client, temp_user, db):
     with db.cursor() as cur:
         cur.execute("UPDATE `user` SET is_admin=1 WHERE id=%s", (temp_user["user_id"],))
 
+    # 每个用例都会登录一次，跑满 10 次就会撞上「登录 10 次/分」的限流，
+    # 表现为 fixture 里的 assert 429 失败 —— 所以登录前先清计数
+    _clear_rate_limit("login")
+
     resp = client.post(
         "/api/user/login",
         json={"username": temp_user["username"], "password": temp_user["password"]},

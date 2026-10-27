@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.db_conf import get_database
 from crud import admin_news
+from models.users import User
 from schemas.admin import AdminNewsItemResponse, AdminNewsListResponse, AdminNewsUpsertRequest
 from utils.auth import get_current_admin
 from utils.response import success_response
@@ -48,8 +49,12 @@ async def get_news(news_id: int, db: AsyncSession = Depends(get_database)):
 
 
 @router.post("/news")
-async def create_news(data: AdminNewsUpsertRequest, db: AsyncSession = Depends(get_database)):
-    news = await admin_news.create_news(db, data)
+async def create_news(
+        data: AdminNewsUpsertRequest,
+        user: User = Depends(get_current_admin),
+        db: AsyncSession = Depends(get_database),
+):
+    news = await admin_news.create_news(db, data, user.id)
     return success_response(data=AdminNewsItemResponse.model_validate(news), message="创建成功")
 
 

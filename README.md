@@ -115,6 +115,11 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | GET | `/api/comment/list?newsId&page&pageSize` | 否 | 评论列表；登录后每项多返回 `canDelete` |
 | POST | `/api/comment/add` | 是 | 发表评论（≤500 字） |
 | DELETE | `/api/comment/{id}` | 是 | 删除评论（本人或管理员） |
+| POST | `/api/upload/image` | 是 | 上传图片（≤5MB，JPG/PNG/GIF/WebP） |
+| GET | `/api/notification/list?page&pageSize` | 是 | 通知列表，附带未读数 |
+| GET | `/api/notification/unread-count` | 是 | 未读数 |
+| PUT | `/api/notification/{id}/read` | 是 | 单条标记已读 |
+| PUT | `/api/notification/read-all` | 是 | 全部已读 |
 | POST | `/api/user/register` | 否 | 注册（限 5 次/分/IP） |
 | POST | `/api/user/login` | 否 | 登录（限 10 次/分/IP） |
 | GET | `/api/user/info` | 是 | 当前用户 |
@@ -163,6 +168,24 @@ python scripts/make_admin.py <用户名>
   （没用 toggle，就是怕弱网重试把状态翻回去）。点赞数不冗余到 `news` 表，实时 COUNT。
 - **推荐**：收藏权重 3、浏览权重 1，取 Top3 分类的未读新闻，不足用热门补齐（同样排除已读）；
   游客或新用户直接给全站热门。
+- **图片上传**：类型按**文件头魔数**判断，不看文件名和 Content-Type（改后缀绕不过去）；
+  文件名由服务端用 uuid 生成，杜绝路径穿越；单个文件 ≤5MB。
+- **通知**：接收者是 `news.user_id`（后台发布时记录）。评论、点赞触发；自己操作自己的不通知；
+  重复点赞（幂等）只通知一次。没有实时推送，进「消息通知」页时才拉取。
+
+## Docker 部署
+
+不想装 MySQL / Redis / Python 环境时，用 compose 一次起全套：
+
+```bash
+docker compose up -d --build
+```
+
+- 前端 <http://localhost:8080>，后端 <http://localhost:8000>，账号 `admin / admin`
+- 首次启动会自动执行 `database.sql`，建表并灌入示例新闻
+- 数据库和上传的图片都在 named volume 里，`docker compose down` 不丢数据，加 `-v` 才会删
+- 前端构建时把 `VITE_API_BASE_URL` 设成空串，请求走 nginx 反代到后端，因此**不经过 CORS**
+- 要接真实的大模型，先在项目根 `.env` 里配好 `AI_CHAT_URL` / `AI_API_KEY`，compose 会读
 
 ## 测试
 

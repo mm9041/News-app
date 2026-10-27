@@ -59,7 +59,20 @@
             @click="showCategoryPicker = true"
           />
           <van-field v-model="form.author" label="作者" placeholder="选填" />
-          <van-field v-model="form.image" label="封面图" placeholder="图片 URL，选填" />
+          <van-field v-model="form.image" label="封面图" placeholder="图片 URL，或点右侧上传">
+            <template #button>
+              <van-button size="small" type="primary" plain :loading="uploading" @click="pickImage">
+                上传
+              </van-button>
+            </template>
+          </van-field>
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/*"
+            style="display: none"
+            @change="onFileChange"
+          />
           <van-field
             v-model="form.description"
             label="摘要"
@@ -111,6 +124,7 @@ import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 
 import http from '../api/http'
+import { uploadImage } from '../api/upload'
 import { useNewsStore } from '../store/modules/news'
 
 const router = useRouter()
@@ -137,6 +151,8 @@ const showCategoryPicker = ref(false)
 const editingId = ref(null)
 const saving = ref(false)
 const removing = ref(false)
+const uploading = ref(false)
+const fileInput = ref(null)
 const form = ref(emptyForm())
 
 function emptyForm() {
@@ -247,6 +263,25 @@ const onCategoryConfirm = ({ selectedOptions }) => {
     form.value.categoryName = option.text
   }
   showCategoryPicker.value = false
+}
+
+const pickImage = () => fileInput.value?.click()
+
+const onFileChange = async event => {
+  const file = event.target.files?.[0]
+  // 清空 value，否则连续选同一个文件不会触发 change
+  event.target.value = ''
+  if (!file) return
+
+  uploading.value = true
+  try {
+    form.value.image = await uploadImage(file)
+    showToast('上传成功')
+  } catch (error) {
+    showToast(error.message || '上传失败')
+  } finally {
+    uploading.value = false
+  }
 }
 
 const buildPayload = () => ({

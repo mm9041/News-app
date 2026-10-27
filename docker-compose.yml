@@ -1,0 +1,82 @@
+# 一键起完整环境：mysql + redis + backend + frontend
+#
+#   docker compose up -d --build      启动（首次会自动建表并灌入示例数据）
+#   docker compose logs -f backend    看后端日志
+#   docker compose down               停止（加 -v 会连数据一起删）
+#
+# 访问：http://localhost:8080    账号 admin / admin
+#
+# 变量默认读同目录的 .env（DB_PASSWORD、AI_* 等），没配就用下面的默认值。
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root123456}
+      MYSQL_DATABASE: news_app
+      TZ: Asia/Shanghai
+    # ngram_token_size 是全文索引的分词长度，必须和代码里的 NGRAM_MIN_CHARS 对齐
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --ngram_token_size=2
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # 只在数据卷为空时执行一次，用来建表 + 灌示例新闻
+      - ./database.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: .
+    environment:
+      # 容器内用服务名，不能用 127.0.0.1
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-root123456}
+      DB_NAME: news_app
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # 前端走同一个 nginx，同源请求其实用不到 CORS；这里留白名单方便直连调试
+      CORS_ALLOW_ORIGINS: http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      AI_CHAT_URL: ${AI_CHAT_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-qwen3.7-flash}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      # 上传的图片要持久化，否则重建容器就丢了
+      - uploads:/app/uploads
+
+  frontend:
+    build: ./xwzx-news
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  mysql_data:
+  uploads:

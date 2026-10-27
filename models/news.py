@@ -36,6 +36,9 @@ class News(Base, TimestampMixin):
         # ngram_token_size 默认 2，单字关键词 MATCH 不到，应用层会回退 LIKE。
         Index("ft_news_search", "title", "description", "content",
               mysql_prefix="FULLTEXT", mysql_with_parser="ngram"),
+        # 发布者：后台创建新闻时记当前管理员，用来给「我的新闻被评论/点赞」发通知。
+        # 历史种子数据这一列是 NULL，不会产生通知。
+        Index("fk_news_user_idx", "user_id"),
     )
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="新闻ID")
     title: Mapped[str] = mapped_column(String(255), nullable=False, comment="新闻标题")
@@ -44,6 +47,9 @@ class News(Base, TimestampMixin):
     image: Mapped[Optional[str]] = mapped_column(String(255), comment="新闻图片")
     author: Mapped[Optional[str]] = mapped_column(String(50), comment="作者")
     category_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("news_category.id"), nullable=False, comment="分类ID")
+    user_id: Mapped[Optional[int]] = mapped_column(
+        UnsignedInt, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, comment="发布者ID"
+    )
     views: Mapped[int] = mapped_column(UnsignedInt, default=0, nullable=False, comment="浏览次数")
     publish_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="发布时间")
 

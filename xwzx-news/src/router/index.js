@@ -89,6 +89,16 @@ const routes = [
     }
   },
   {
+    path: '/notifications',
+    name: 'Notifications',
+    component: () => import('../views/Notifications.vue'),
+    meta: {
+      title: '消息通知',
+      keepAlive: false,
+      requiresAuth: true
+    }
+  },
+  {
     path: '/aichat',
     name: 'AIChat',
     component: () => import('../views/AIChat.vue'),

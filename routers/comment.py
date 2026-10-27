@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.db_conf import get_database
 from crud import comment as comment_crud
 from crud import news_cache
+from crud import notification as notification_crud
 from models.users import User
 from schemas.comment import (
     CommentAddRequest,
@@ -80,6 +81,18 @@ async def add_comment(
         )
 
     comment = await comment_crud.add_comment(db, data.news_id, user.id, content)
+
+    # 通知新闻发布者。`news.user_id` 为空（历史种子数据）或自己评论自己的，都不发
+    if news.user_id and news.user_id != user.id:
+        await notification_crud.create(
+            db,
+            user_id=news.user_id,
+            actor_id=user.id,
+            type_="comment",
+            news_id=data.news_id,
+            comment_id=comment.id,
+        )
+
     return success_response(data={"id": comment.id}, message="评论成功")
 
 

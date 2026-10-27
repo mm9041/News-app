@@ -38,9 +38,10 @@ async def get_news(db: AsyncSession, news_id: int) -> News | None:
     return result.scalar_one_or_none()
 
 
-async def create_news(db: AsyncSession, data: AdminNewsUpsertRequest) -> News:
+async def create_news(db: AsyncSession, data: AdminNewsUpsertRequest, user_id: int | None = None) -> News:
     values = data.model_dump(exclude={"publish_time"})
-    news = News(**values)
+    # 记下发布者，评论/点赞时才能给ta发通知
+    news = News(**values, user_id=user_id)
     # 不传发布时间就交给模型的 default（datetime.now）
     if data.publish_time:
         news.publish_time = data.publish_time

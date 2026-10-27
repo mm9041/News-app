@@ -38,7 +38,7 @@
       <van-cell-group inset>
         <van-cell :title="$t('my.myFavorite')" is-link @click="goToFavorite" />
         <van-cell :title="$t('my.browsingHistory')" is-link @click="goToHistory" />
-        <van-cell :title="$t('my.notifications')" is-link />
+        <van-cell :title="$t('my.notifications')" is-link :badge="unreadCount > 0 ? unreadCount : ''" @click="goToNotifications" />
         <van-cell v-if="userInfo?.isAdmin" title="新闻管理" is-link @click="goToAdminNews" />
         <van-cell :title="$t('my.settings')" is-link @click="goToSettings" />
         <van-cell v-if="isLogin" :title="$t('my.logout')" @click="handleLogout" />
@@ -55,6 +55,7 @@ import { useRouter } from 'vue-router';
 import { showDialog, showToast } from 'vant';
 import TabBar from '../components/TabBar.vue';
 import { useI18n } from 'vue-i18n';
+import http from '../api/http';
 
 const userStore = useUserStore();
 const router = useRouter();
@@ -64,6 +65,30 @@ const { t } = useI18n();
 const userInfo = computed(() => userStore.userInfo);
 const isLogin = computed(() => userStore.getLoginStatus);
 const userBio = computed(() => userStore.getUserBio || t('profile.bio'));
+
+// 未读通知数，显示在「消息通知」右侧
+const unreadCount = ref(0);
+
+const loadUnread = async () => {
+  if (!isLogin.value) {
+    unreadCount.value = 0;
+    return;
+  }
+  try {
+    const res = await http.get('/api/notification/unread-count');
+    unreadCount.value = res.data?.data?.count || 0;
+  } catch (error) {
+    // 未读数失败不影响页面
+  }
+};
+
+const goToNotifications = () => {
+  if (!isLogin.value) {
+    showToast(t('common.login'));
+    return;
+  }
+  router.push('/notifications');
+};
 
 // 跳转到登录页
 const goToLogin = () => {
@@ -141,13 +166,17 @@ const loadUserInfo = async () => {
 // 标志必须在 await 之前置位：两个 hook 在同一个 tick 里先后触发，
 // 若等请求返回才置位，首次进入会请求两次。
 const activatedBefore = ref(false);
-onMounted(loadUserInfo);
+onMounted(() => {
+  loadUserInfo();
+  loadUnread();
+});
 onActivated(() => {
   if (!activatedBefore.value) {
     activatedBefore.value = true;
     return;
   }
   loadUserInfo();
+  loadUnread();
 });
 </script>
 

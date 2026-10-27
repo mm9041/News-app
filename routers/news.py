@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.db_conf import get_database
 from crud import like as like_crud
 from crud import news_cache, news_search
+from crud import notification as notification_crud
 from crud import recommend as recommend_crud
 from models.users import User
 from schemas.base import NewsItemBase
@@ -145,8 +146,19 @@ async def like_news(
     if not news:
         raise HTTPException(status_code=404, detail="新闻不存在")
 
-    await like_crud.like(db, news_id, user.id)
+    created = await like_crud.like(db, news_id, user.id)
     likes = await like_crud.count_likes(db, news_id)
+
+    # 只在「本次真的新增了点赞」时通知，重复点赞不会反复骚扰发布者
+    if created and news.user_id and news.user_id != user.id:
+        await notification_crud.create(
+            db,
+            user_id=news.user_id,
+            actor_id=user.id,
+            type_="like",
+            news_id=news_id,
+        )
+
     return {"code": 200, "message": "已点赞", "data": {"liked": True, "likes": likes}}
 
 

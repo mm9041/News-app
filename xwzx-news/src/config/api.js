@@ -4,10 +4,11 @@
  */
 
 // API基础URL配置
-// 部署时在 xwzx-news/.env 里写 VITE_API_BASE_URL=https://api.example.com 覆盖，
-// 不用再去改代码。本地开发保持回落到 127.0.0.1:8000。
+// 本地开发不配置时回落到 127.0.0.1:8000；
+// Docker 里部署时显式设成空串 VITE_API_BASE_URL=，请求走相对路径，由 nginx 反代到后端。
+// （用 ?? 而不是 ||：空串是有效值，不能被当成「没配置」）
 export const apiConfig = {
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000',
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000',
 }
 
 export const aiChatConfig = {
