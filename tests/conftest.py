@@ -64,7 +64,9 @@ def temp_user(client):
 
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM `user` WHERE username LIKE 'pytest_a_%'")
+            # 用转义后的下划线精确匹配前缀：LIKE 'pytest_a_%' 里的 _ 是通配符，
+            # 会把 pytest_adm_xxx 也一起删掉
+            cur.execute(r"DELETE FROM `user` WHERE username LIKE 'pytest\_a\_%'")
 
     _clear_rate_limit("register")
 
@@ -98,28 +100,49 @@ def other_user(client):
 
 
 @pytest.fixture
-def admin_user(client, temp_user, db):
-    """在 temp_user 基础上把 is_admin 置 1，并重新登录换一个带新状态的 token。
+def admin_user(client, db):
+    """独立的管理员账号。
 
-    重新登录是必须的：create_token 是「每用户一条」，旧 token 会被覆盖；
-    而且登录响应里的 userInfo.isAdmin 来自重新查库，能反映刚才的 UPDATE。
+    ⚠️ 不能基于 temp_user：`create_token` 是「每用户只保留一条」，
+    admin_user 重新登录会把 temp_user 的 token 顶掉，
+    同一个用例里再用 temp_user 的 token 就是 401。
     """
-    with db.cursor() as cur:
-        cur.execute("UPDATE `user` SET is_admin=1 WHERE id=%s", (temp_user["user_id"],))
+    username = f"pytest_adm_{uuid.uuid4().hex[:8]}"
+    password = "Pytest123456"
 
-    # 每个用例都会登录一次，跑满 10 次就会撞上「登录 10 次/分」的限流，
-    # 表现为 fixture 里的 assert 429 失败 —— 所以登录前先清计数
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(r"DELETE FROM `user` WHERE username LIKE 'pytest\_adm\_%'")
+
+    _clear_rate_limit("register")
+    resp = client.post("/api/user/register", json={"username": username, "password": password})
+    assert resp.status_code == 200, resp.text
+    user_id = resp.json()["data"]["userInfo"]["id"]
+
+    with db.cursor() as cur:
+        cur.execute("UPDATE `user` SET is_admin=1 WHERE id=%s", (user_id,))
+
+    # 每个用例都会登录一次，跑满 10 次就会撞上「登录 10 次/分」的限流
     _clear_rate_limit("login")
 
     resp = client.post(
         "/api/user/login",
-        json={"username": temp_user["username"], "password": temp_user["password"]},
+        json={"username": username, "password": password},
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()["data"]
     assert data["userInfo"]["isAdmin"] is True
 
-    return {**temp_user, "token": data["token"]}
+    yield {
+        "username": username,
+        "password": password,
+        "user_id": user_id,
+        "token": data["token"],
+    }
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM `user` WHERE username=%s", (username,))
 
 
 def _clear_rate_limit(prefix: str) -> None:

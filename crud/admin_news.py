@@ -9,6 +9,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cache.news_cache import invalidate_news_list
+from crud import tag as tag_crud
+from crud.news_cache import invalidate_news_detail
 from models.news import News
 from schemas.admin import AdminNewsUpsertRequest
 
@@ -39,7 +41,8 @@ async def get_news(db: AsyncSession, news_id: int) -> News | None:
 
 
 async def create_news(db: AsyncSession, data: AdminNewsUpsertRequest, user_id: int | None = None) -> News:
-    values = data.model_dump(exclude={"publish_time"})
+    # tags 不是 news 表的列，单独处理
+    values = data.model_dump(exclude={"publish_time", "tags"})
     # 记下发布者，评论/点赞时才能给ta发通知
     news = News(**values, user_id=user_id)
     # 不传发布时间就交给模型的 default（datetime.now）
@@ -49,6 +52,8 @@ async def create_news(db: AsyncSession, data: AdminNewsUpsertRequest, user_id: i
     db.add(news)
     await db.commit()
     await db.refresh(news)
+
+    await tag_crud.set_news_tags(db, news.id, data.tags)
     await invalidate_news_list(news.category_id)
     return news
 
@@ -69,15 +74,21 @@ async def update_news(db: AsyncSession, news: News, data: AdminNewsUpsertRequest
     await db.commit()
     await db.refresh(news)
 
+    await tag_crud.set_news_tags(db, news.id, data.tags)
+
     # 换了分类的话，旧分类的列表缓存也要清
     await invalidate_news_list(old_category_id)
     if news.category_id != old_category_id:
         await invalidate_news_list(news.category_id)
+    # 详情缓存同样要清，否则改了标题正文前台最多 3 分钟看不到
+    await invalidate_news_detail(news.id)
     return news
 
 
 async def delete_news(db: AsyncSession, news: News) -> None:
     category_id = news.category_id
+    news_id = news.id
     await db.delete(news)
     await db.commit()
     await invalidate_news_list(category_id)
+    await invalidate_news_detail(news_id)

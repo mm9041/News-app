@@ -8,6 +8,7 @@ from crud import like as like_crud
 from crud import news_cache, news_search
 from crud import notification as notification_crud
 from crud import recommend as recommend_crud
+from crud import tag as tag_crud
 from models.users import User
 from schemas.base import NewsItemBase
 from utils.auth import get_current_user, get_optional_user
@@ -102,6 +103,8 @@ async def get_news_detail(
         is_liked = await like_crud.is_liked(db, news_id, current_user.id)
 
     related_news = await news_cache.get_related_news(db, news_detail.id, news_detail.category_id)
+    tag_rows = await tag_crud.list_news_tags(db, news_detail.id)
+    tags = [{"id": t.id, "name": t.name} for t in tag_rows]
     return {
         "code": 200,
         "message": "获取新闻详情成功",
@@ -116,6 +119,7 @@ async def get_news_detail(
             "views": views,
             "likes": likes,
             "isLiked": is_liked,
+            "tags": tags,
             "relatedNews": related_news
         }
     }

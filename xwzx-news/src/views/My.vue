@@ -40,6 +40,7 @@
         <van-cell :title="$t('my.browsingHistory')" is-link @click="goToHistory" />
         <van-cell :title="$t('my.notifications')" is-link :badge="unreadCount > 0 ? unreadCount : ''" @click="goToNotifications" />
         <van-cell v-if="userInfo?.isAdmin" title="新闻管理" is-link @click="goToAdminNews" />
+        <van-cell v-if="userInfo?.isAdmin" title="数据看板" is-link @click="goToDashboard" />
         <van-cell :title="$t('my.settings')" is-link @click="goToSettings" />
         <van-cell v-if="isLogin" :title="$t('my.logout')" @click="handleLogout" />
       </van-cell-group>
@@ -115,6 +116,11 @@ const goToProfile = () => {
 // 新闻管理（入口只对管理员显示，路由守卫和后端还会各校验一次）
 const goToAdminNews = () => {
   router.push('/admin/news');
+};
+
+// 数据看板
+const goToDashboard = () => {
+  router.push('/admin/dashboard');
 };
 
 // 跳转到浏览历史页面

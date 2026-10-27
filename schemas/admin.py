@@ -19,6 +19,8 @@ class AdminNewsUpsertRequest(BaseModel):
     author: Optional[str] = Field(None, max_length=50, description="作者")
     category_id: int = Field(..., ge=1, alias="categoryId", description="分类ID")
     publish_time: Optional[datetime] = Field(None, alias="publishTime", description="发布时间")
+    # 自由文本标签，最多 5 个；不存在的会自动创建
+    tags: list[str] = Field(default_factory=list, max_length=5, description="标签")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -33,6 +35,7 @@ class AdminNewsItemResponse(BaseModel):
     category_id: int = Field(alias="categoryId")
     views: int
     publish_time: Optional[datetime] = Field(None, alias="publishTime")
+    tags: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 

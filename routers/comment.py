@@ -1,9 +1,10 @@
-"""新闻评论。
+"""新闻评论（两级：评论 + 回复）。
 
-设计取舍：
-- 单层评论，不做楼中楼（回复需要树形渲染，先把主链跑通）
+权限与通知规则：
+- 列表公开可读，登录后每项带 canDelete（本人或管理员）
+- 发布需登录；回复别人的评论时通知被回复者，发一级评论时通知新闻发布者
+- 删除权限 = 本人 or 管理员；删一级评论会级联删掉它的回复
 - 不做软删除：删了就是删了，新闻/用户被删时外键 CASCADE 一起清
-- 列表公开可读；发布与删除需要登录；删除权限 = 本人 or 管理员
 """
 
 from typing import Optional
@@ -20,12 +21,18 @@ from schemas.comment import (
     CommentAddRequest,
     CommentItemResponse,
     CommentListResponse,
+    CommentReply,
     CommentUser,
 )
 from utils.auth import get_current_user, get_optional_user
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/comment", tags=["comment"])
+
+
+def _can_delete(current_user: Optional[User], owner_id: int) -> bool:
+    """本人或管理员。规则只写这一处，列表和详情不会不一致。"""
+    return bool(current_user and (current_user.id == owner_id or current_user.is_admin))
 
 
 @router.get("/list")
@@ -36,23 +43,35 @@ async def list_comments(
         db: AsyncSession = Depends(get_database),
         current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """按时间倒序分页。游客也能看，登录后额外返回 canDelete。"""
+    """一级评论分页，每条带出它下面的全部回复。"""
     skip = (page - 1) * page_size
-    rows, total = await comment_crud.list_comments(db, news_id, skip, page_size)
+    roots, replies_map, total = await comment_crud.list_comments(db, news_id, skip, page_size)
 
-    items = [
-        CommentItemResponse(
-            id=item.id,
-            content=item.content,
-            created_at=item.created_at,
-            user=CommentUser.model_validate(author),
-            can_delete=bool(
-                current_user
-                and (current_user.id == item.user_id or current_user.is_admin)
-            ),
+    items = []
+    for comment, author in roots:
+        replies = [
+            CommentReply(
+                id=reply.id,
+                content=reply.content,
+                created_at=reply.created_at,
+                user=CommentUser.model_validate(reply_author),
+                can_delete=_can_delete(current_user, reply.user_id),
+                parent_id=reply.parent_id,
+                reply_to=reply_to_name,
+            )
+            for reply, reply_author, reply_to_name in replies_map.get(comment.id, [])
+        ]
+        items.append(
+            CommentItemResponse(
+                id=comment.id,
+                content=comment.content,
+                created_at=comment.created_at,
+                user=CommentUser.model_validate(author),
+                can_delete=_can_delete(current_user, comment.user_id),
+                parent_id=None,
+                replies=replies,
+            )
         )
-        for item, author in rows
-    ]
 
     data = CommentListResponse(
         list=items,
@@ -68,7 +87,6 @@ async def add_comment(
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    # 先确认新闻存在，否则外键会直接抛 IntegrityError，变成一条看不懂的 400
     news = await news_cache.get_news_detail(db, data.news_id)
     if not news:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="新闻不存在")
@@ -80,10 +98,31 @@ async def add_comment(
             detail="评论内容不能为空",
         )
 
-    comment = await comment_crud.add_comment(db, data.news_id, user.id, content)
+    # 回复：把 parent 归到所属的一级评论，同时记下「回复给谁」
+    root_id: Optional[int] = None
+    reply_to_user_id: Optional[int] = None
+    if data.parent_id:
+        parent = await comment_crud.get_comment(db, data.parent_id)
+        if not parent or parent.news_id != data.news_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="被回复的评论不存在")
+        root_id = parent.parent_id or parent.id
+        reply_to_user_id = parent.user_id
 
-    # 通知新闻发布者。`news.user_id` 为空（历史种子数据）或自己评论自己的，都不发
-    if news.user_id and news.user_id != user.id:
+    comment = await comment_crud.add_comment(
+        db, data.news_id, user.id, content, root_id, reply_to_user_id
+    )
+
+    # 通知：回复优先（通知被回复者），否则通知新闻发布者
+    if reply_to_user_id and reply_to_user_id != user.id:
+        await notification_crud.create(
+            db,
+            user_id=reply_to_user_id,
+            actor_id=user.id,
+            type_="reply",
+            news_id=data.news_id,
+            comment_id=comment.id,
+        )
+    elif news.user_id and news.user_id != user.id:
         await notification_crud.create(
             db,
             user_id=news.user_id,

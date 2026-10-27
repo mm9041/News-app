@@ -59,6 +59,11 @@
             @click="showCategoryPicker = true"
           />
           <van-field v-model="form.author" label="作者" placeholder="选填" />
+          <van-field
+            v-model="form.tagsText"
+            label="标签"
+            placeholder="逗号分隔，最多 5 个"
+          />
           <van-field v-model="form.image" label="封面图" placeholder="图片 URL，或点右侧上传">
             <template #button>
               <van-button size="small" type="primary" plain :loading="uploading" @click="pickImage">
@@ -162,6 +167,7 @@ function emptyForm() {
     content: '',
     image: '',
     author: '',
+    tagsText: '',
     categoryId: null,
     categoryName: ''
   }
@@ -247,6 +253,7 @@ const openEdit = async item => {
       content: data.content,
       image: data.image || '',
       author: data.author || '',
+      tagsText: (data.tags || []).join(','),
       categoryId: data.categoryId,
       categoryName: categoryName(data.categoryId)
     }
@@ -290,7 +297,14 @@ const buildPayload = () => ({
   content: form.value.content,
   image: form.value.image.trim() || null,
   author: form.value.author.trim() || null,
-  categoryId: form.value.categoryId
+  categoryId: form.value.categoryId,
+  // 中英文逗号都当分隔符，去空、去重、最多 5 个（后端也会再截一次）
+  tags: [...new Set(
+    form.value.tagsText
+      .split(/[,，]/)
+      .map(item => item.trim())
+      .filter(Boolean)
+  )].slice(0, 5)
 })
 
 const save = async () => {

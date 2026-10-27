@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from cache import view_counter
 from crud.news_views import flush_view_deltas
-from routers import news, users, favorite, history, ai, admin, comment, upload, notification
+from routers import news, users, favorite, history, ai, admin, comment, upload, notification, tag
 from utils.exception_handlers import register_exception_handlers
 from utils.logger import get_logger, setup_logging
 from utils.middleware import RequestIdMiddleware
@@ -109,6 +109,7 @@ app.include_router(admin.router)
 app.include_router(comment.router)
 app.include_router(upload.router)
 app.include_router(notification.router)
+app.include_router(tag.router)
 
 # 上传的图片直接由 FastAPI 托管；生产环境应该换成 nginx / 对象存储
 UPLOAD_ROOT = BASE_DIR / "uploads"

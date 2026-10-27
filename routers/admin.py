@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.db_conf import get_database
-from crud import admin_news
+from crud import admin_news, stats
+from crud import tag as tag_crud
 from models.users import User
 from schemas.admin import AdminNewsItemResponse, AdminNewsListResponse, AdminNewsUpsertRequest
 from utils.auth import get_current_admin
@@ -21,6 +22,14 @@ router = APIRouter(
     tags=["admin"],
     dependencies=[Depends(get_current_admin)],
 )
+
+
+async def _with_tags(db: AsyncSession, news) -> AdminNewsItemResponse:
+    """详情/创建/更新的响应带上标签；列表不带（省一次 N+1）。"""
+    data = AdminNewsItemResponse.model_validate(news)
+    tags = await tag_crud.list_news_tags(db, news.id)
+    data.tags = [tag.name for tag in tags]
+    return data
 
 
 @router.get("/news")
@@ -45,7 +54,7 @@ async def get_news(news_id: int, db: AsyncSession = Depends(get_database)):
     news = await admin_news.get_news(db, news_id)
     if not news:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="新闻不存在")
-    return success_response(data=AdminNewsItemResponse.model_validate(news), message="获取新闻成功")
+    return success_response(data=await _with_tags(db, news), message="获取新闻成功")
 
 
 @router.post("/news")
@@ -55,7 +64,7 @@ async def create_news(
         db: AsyncSession = Depends(get_database),
 ):
     news = await admin_news.create_news(db, data, user.id)
-    return success_response(data=AdminNewsItemResponse.model_validate(news), message="创建成功")
+    return success_response(data=await _with_tags(db, news), message="创建成功")
 
 
 @router.put("/news/{news_id}")
@@ -65,7 +74,7 @@ async def update_news(news_id: int, data: AdminNewsUpsertRequest, db: AsyncSessi
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="新闻不存在")
 
     news = await admin_news.update_news(db, news, data)
-    return success_response(data=AdminNewsItemResponse.model_validate(news), message="更新成功")
+    return success_response(data=await _with_tags(db, news), message="更新成功")
 
 
 @router.delete("/news/{news_id}")
@@ -76,3 +85,21 @@ async def delete_news(news_id: int, db: AsyncSession = Depends(get_database)):
 
     await admin_news.delete_news(db, news)
     return success_response(message="删除成功")
+
+
+@router.get("/stats")
+async def get_stats(
+        days: int = Query(7, ge=1, le=30, description="趋势天数"),
+        top: int = Query(10, ge=1, le=20, description="热门新闻条数"),
+        db: AsyncSession = Depends(get_database),
+):
+    """看板数据一次性返回，避免前端发四个请求。"""
+    return success_response(
+        data={
+            "overview": await stats.overview(db),
+            "trend": await stats.trend(db, days),
+            "categories": await stats.categories(db),
+            "topNews": await stats.top_news(db, top),
+        },
+        message="获取统计数据成功",
+    )

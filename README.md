@@ -112,9 +112,11 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | GET | `/api/news/recommend?limit` | 否 | 猜你喜欢；登录后按兴趣推荐，游客给热门 |
 | PUT | `/api/news/{id}/like` | 是 | 点赞（幂等） |
 | DELETE | `/api/news/{id}/like` | 是 | 取消点赞（幂等） |
-| GET | `/api/comment/list?newsId&page&pageSize` | 否 | 评论列表；登录后每项多返回 `canDelete` |
-| POST | `/api/comment/add` | 是 | 发表评论（≤500 字） |
-| DELETE | `/api/comment/{id}` | 是 | 删除评论（本人或管理员） |
+| GET | `/api/comment/list?newsId&page&pageSize` | 否 | 一级评论分页，每条带出回复 |
+| POST | `/api/comment/add` | 是 | 发表评论 / 回复（传 `parentId`） |
+| DELETE | `/api/comment/{id}` | 是 | 删除评论（本人或管理员，级联删回复） |
+| GET | `/api/tag/hot?limit` | 否 | 标签墙（按引用次数） |
+| GET | `/api/tag/{id}/news?page` | 否 | 某标签下的新闻 |
 | POST | `/api/upload/image` | 是 | 上传图片（≤5MB，JPG/PNG/GIF/WebP） |
 | GET | `/api/notification/list?page&pageSize` | 是 | 通知列表，附带未读数 |
 | GET | `/api/notification/unread-count` | 是 | 未读数 |
@@ -134,6 +136,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | POST | `/api/admin/news` | 管理员 | 新建新闻 |
 | PUT | `/api/admin/news/{id}` | 管理员 | 更新（PUT 语义，整份覆盖） |
 | DELETE | `/api/admin/news/{id}` | 管理员 | 删除 |
+| GET | `/api/admin/stats?days&top` | 管理员 | 看板：总览 / 趋势 / 分类 / 热门 |
 
 鉴权头：`Authorization: <token>`，带不带 `Bearer ` 前缀都行。
 
@@ -155,15 +158,20 @@ python scripts/make_admin.py <用户名>
 ## 几个设计要点
 
 - **阅读量**：详情页只 `INCR view:delta:{id}`，不写库也不清列表缓存；读的时候 `库内值 + 未回写增量`；后台每 30 秒批量回写并 `DECRBY`。Redis 不可用时退回直写数据库。列表缓存里存的是**数据库原值**，否则命中缓存会把同一份增量重复累加。
-- **缓存**：分类 2h、列表 30min，读时回填。后台直接改 `news` 表后，列表最多 30 分钟仍是旧数据，需手动清 `news_list:*`。
+- **缓存**：分类 2h、列表 30min、**详情 2~3 分钟（TTL 带随机抖动）**，读时回填。
+  详情缓存顺带处理了三件事：查不到的 id 写 30 秒空值缓存（防穿透）、
+  过期瞬间用 Redis 互斥锁只放一个请求回源（防击穿）、TTL 加抖动避免同批失效（防雪崩）。
+  后台改/删新闻会主动清详情缓存。
 - **认证**：`user_token` 只存 `sha256(token)`，明文只在登录/注册响应里返回一次；7 天有效；每用户一条，重新登录会顶掉旧 token（多端互踢）。
 - **限流**：基于 Redis 固定窗口，Redis 故障时放行（保护措施不能把业务拦死）。
 - **前端请求**：统一走 `src/api/http.js`，token 由 `main.js` 注入，401 全局清登录态并跳登录页。
 - **搜索**：`news` 表上建了 ngram 全文索引，查询用 `BOOLEAN MODE` 的短语匹配。
   单字关键词（`ngram_token_size=2` 切不出来）和英文短词（实测 `NASA` 的 MATCH 得分是 0）
   会回退到 LIKE，原因写在 `crud/news_search.py` 顶部注释里。
-- **评论**：单层评论、不做楼中楼，删除即物理删除（新闻/用户被删时外键 CASCADE 一并清掉）。
+- **评论**：只有两级（评论 + 回复）。回复的 `parent_id` 始终指向一级评论，
+  「回复给谁」单独记在 `reply_to_user_id`，所以不会出现无限嵌套。
   列表公开可读，`canDelete` 由后端算好（本人或管理员），前端不做二次判断。
+- **标签**：自由文本，最多 5 个/篇，靠 `tag.name` 与 `(news_id, tag_id)` 两个唯一索引去重。
 - **点赞**：`news_like` 表 `(user_id, news_id)` 唯一索引，PUT/DELETE 都是幂等的
   （没用 toggle，就是怕弱网重试把状态翻回去）。点赞数不冗余到 `news` 表，实时 COUNT。
 - **推荐**：收藏权重 3、浏览权重 1，取 Top3 分类的未读新闻，不足用热门补齐（同样排除已读）；
@@ -204,7 +212,31 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-测试会连本地 MySQL（读为主），写操作只创建一个临时用户并在用例内清理。
+测试会连本地 MySQL（读为主），写操作只创建临时用户并在用例内清理。
+
+## CI
+
+`.github/workflows/ci.yml` 在每次 push / PR 时跑两个 job：
+
+- **backend**：起 mysql:8.0 + redis:7 service → 导入 `database.sql` → `check_schema` → `pytest`
+- **frontend**：`npm ci` + `npm run build`
+
+## 压测
+
+```bash
+python scripts/loadtest.py --path "/api/news/detail?id=45" --concurrency 20 --duration 8
+```
+
+在 20 并发、本机 MySQL 的条件下实测：
+
+| 接口 | QPS | P50 | P95 |
+|---|---|---|---|
+| 详情（缓存 + 3 次查询） | 144 | 134 ms | 171 ms |
+| 列表（缓存 + 分页） | 145 | 73 ms | 486 ms |
+| 搜索（FULLTEXT 单查询） | 223 | 41 ms | 61 ms |
+
+结论：瓶颈不在缓存命中率，而在**单次请求的数据库往返次数**——
+详情接口一次要查点赞数、相关推荐、标签，三次往返把延迟拉到 130ms 以上。
 
 ## 已知限制
 

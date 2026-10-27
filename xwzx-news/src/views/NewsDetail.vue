@@ -41,6 +41,17 @@
         </p>
       </div>
       
+      <div class="tag-list" v-if="newsStore.newsDetail.tags?.length">
+        <span
+          v-for="tag in newsStore.newsDetail.tags"
+          :key="tag.id"
+          class="tag-item"
+          @click="goToTag(tag.id)"
+        >
+          #{{ tag.name }}
+        </span>
+      </div>
+
       <div class="related-news" v-if="newsStore.newsDetail.relatedNews?.length">
         <h3>相关推荐</h3>
         <div class="related-list">
@@ -66,16 +77,22 @@
         </div>
 
         <div class="comment-editor">
-          <van-field
-            v-model="commentText"
-            rows="2"
-            autosize
-            type="textarea"
-            maxlength="500"
-            show-word-limit
-            placeholder="说点什么..."
-            class="comment-field"
-          />
+          <div class="editor-main">
+            <div v-if="replyTarget" class="reply-hint">
+              回复 @{{ replyTarget.name }}
+              <span class="reply-cancel" @click="cancelReply">取消</span>
+            </div>
+            <van-field
+              v-model="commentText"
+              rows="2"
+              autosize
+              type="textarea"
+              maxlength="500"
+              show-word-limit
+              :placeholder="replyTarget ? `回复 @${replyTarget.name}` : '说点什么...'"
+              class="comment-field"
+            />
+          </div>
           <van-button
             size="small"
             type="primary"
@@ -100,9 +117,36 @@
               <div class="comment-meta">
                 <span class="comment-name">{{ item.user.nickname || item.user.username }}</span>
                 <span class="comment-time">{{ formatTime(item.createdAt) }}</span>
-                <span v-if="item.canDelete" class="comment-delete" @click="deleteComment(item)">删除</span>
+                <span class="comment-actions">
+                  <span class="comment-reply" @click="startReply(item.id, item.user.nickname || item.user.username)">回复</span>
+                  <span v-if="item.canDelete" class="comment-delete" @click="deleteComment(item)">删除</span>
+                </span>
               </div>
               <div class="comment-text">{{ item.content }}</div>
+
+              <div v-if="item.replies && item.replies.length" class="reply-list">
+                <div v-for="reply in item.replies" :key="reply.id" class="reply-item">
+                  <van-image
+                    round
+                    width="24"
+                    height="24"
+                    class="comment-avatar"
+                    :src="reply.user.avatar || defaultAvatar"
+                  />
+                  <div class="reply-body">
+                    <div class="comment-meta">
+                      <span class="comment-name">{{ reply.user.nickname || reply.user.username }}</span>
+                      <span v-if="reply.replyTo" class="reply-to">回复 @{{ reply.replyTo }}</span>
+                      <span class="comment-time">{{ formatTime(reply.createdAt) }}</span>
+                      <span class="comment-actions">
+                        <span class="comment-reply" @click="startReply(reply.id, reply.user.nickname || reply.user.username)">回复</span>
+                        <span v-if="reply.canDelete" class="comment-delete" @click="deleteComment(reply)">删除</span>
+                      </span>
+                    </div>
+                    <div class="comment-text">{{ reply.content }}</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -151,6 +195,9 @@ const onClickLeft = () => {
 }
 
 // 跳转到相关新闻
+const goToTag = (tagId) => {
+  router.push(`/tag/${tagId}`)
+}
 const goToRelatedNews = (id) => {
   router.push(`/news/detail/${id}`)
 }
@@ -278,6 +325,22 @@ const commentLoaded = ref(false)
 const commentLoading = ref(false)
 const commentText = ref('')
 const submitting = ref(false)
+// 正在回复的目标：{ id, name }。null 表示发一级评论
+const replyTarget = ref(null)
+
+const startReply = (id, name) => {
+  replyTarget.value = { id, name }
+  commentText.value = ''
+  // 输入框在列表上方，滚回去并聚焦
+  const editor = document.querySelector('.comment-editor')
+  if (editor) {
+    editor.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+}
+
+const cancelReply = () => {
+  replyTarget.value = null
+}
 
 const formatTime = value => (value ? String(value).replace('T', ' ').slice(0, 16) : '')
 
@@ -328,8 +391,14 @@ const submitComment = async () => {
 
   submitting.value = true
   try {
-    await http.post('/api/comment/add', { newsId: newsId.value, content })
+    const payload = { newsId: newsId.value, content }
+    if (replyTarget.value) {
+      payload.parentId = replyTarget.value.id
+    }
+
+    await http.post('/api/comment/add', payload)
     commentText.value = ''
+    replyTarget.value = null
     showToast('评论成功')
     await loadComments(true)
   } catch (error) {
@@ -538,6 +607,74 @@ watch(newsId, (newId, oldId) => {
   margin-bottom: 8px;
 }
 
+.editor-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.reply-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #1989fa;
+}
+
+.reply-cancel {
+  color: #969799;
+  text-decoration: underline;
+}
+
+.comment-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+}
+
+.comment-reply {
+  font-size: 12px;
+  color: #1989fa;
+}
+
+.reply-list {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: #f7f8fa;
+  border-radius: 6px;
+}
+
+.reply-item {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.reply-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.reply-to {
+  font-size: 11px;
+  color: #646566;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 4px;
+}
+
+.tag-item {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #1989fa;
+  background-color: #f2f8ff;
+  border-radius: 12px;
+}
+
 .comment-field {
   flex: 1;
   padding: 8px;
@@ -580,7 +717,6 @@ watch(newsId, (newId, oldId) => {
 }
 
 .comment-delete {
-  margin-left: auto;
   font-size: 12px;
   color: #ee0a24;
 }

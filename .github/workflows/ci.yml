@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: news_app
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: news_app
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "6379"
+      CORS_ALLOW_ORIGINS: http://localhost:5173
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: 安装依赖
+        run: pip install -r requirements-dev.txt
+
+      - name: 初始化数据库
+        # 显式指定客户端字符集，否则示例数据里的中文会按 latin1 存进去
+        run: mysql --default-character-set=utf8mb4 -h 127.0.0.1 -uroot -proot < database.sql
+
+      - name: 校验模型与库结构一致
+        run: python scripts/check_schema.py
+
+      - name: 跑测试
+        run: python -m pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: xwzx-news/package-lock.json
+
+      - name: 安装依赖
+        working-directory: xwzx-news
+        run: npm ci
+
+      - name: 构建
+        working-directory: xwzx-news
+        run: npm run build

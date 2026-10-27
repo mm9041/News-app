@@ -162,15 +162,29 @@ CREATE TABLE IF NOT EXISTS `news_comment` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '评论ID',
   `news_id` INT UNSIGNED NOT NULL COMMENT '新闻ID',
   `user_id` INT UNSIGNED NOT NULL COMMENT '用户ID',
+  `parent_id` INT UNSIGNED NULL DEFAULT NULL COMMENT '父评论ID（只有两级）',
+  `reply_to_user_id` INT UNSIGNED NULL DEFAULT NULL COMMENT '被回复的用户ID',
   `content` VARCHAR(500) NOT NULL COMMENT '评论内容',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   INDEX `idx_news_created` (`news_id` ASC, `created_at` DESC, `id` DESC),
   INDEX `fk_news_comment_user_idx` (`user_id` ASC),
+  INDEX `fk_comment_parent_idx` (`parent_id` ASC),
+  INDEX `fk_comment_reply_to_idx` (`reply_to_user_id` ASC),
   CONSTRAINT `fk_news_comment_news`
     FOREIGN KEY (`news_id`)
     REFERENCES `news` (`id`)
     ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_comment_parent`
+    FOREIGN KEY (`parent_id`)
+    REFERENCES `news_comment` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_comment_reply_to`
+    FOREIGN KEY (`reply_to_user_id`)
+    REFERENCES `user` (`id`)
+    ON DELETE SET NULL
     ON UPDATE CASCADE,
   CONSTRAINT `fk_news_comment_user`
     FOREIGN KEY (`user_id`)
@@ -670,3 +684,36 @@ CREATE TABLE IF NOT EXISTS `notification` (
     ON DELETE CASCADE
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息通知表';
+
+-- ----------------------------
+-- 标签表
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `tag` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '标签ID',
+  `name` VARCHAR(30) NOT NULL COMMENT '标签名',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `name_UNIQUE` (`name` ASC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='标签表';
+
+-- ----------------------------
+-- 新闻标签关联表
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `news_tag` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '关联ID',
+  `news_id` INT UNSIGNED NOT NULL COMMENT '新闻ID',
+  `tag_id` INT UNSIGNED NOT NULL COMMENT '标签ID',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `news_tag_unique` (`news_id` ASC, `tag_id` ASC),
+  INDEX `fk_news_tag_tag_idx` (`tag_id` ASC),
+  CONSTRAINT `fk_news_tag_news`
+    FOREIGN KEY (`news_id`)
+    REFERENCES `news` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_news_tag_tag`
+    FOREIGN KEY (`tag_id`)
+    REFERENCES `tag` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='新闻标签关联表';

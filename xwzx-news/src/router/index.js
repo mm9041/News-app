@@ -69,6 +69,15 @@ const routes = [
     }
   },
   {
+    path: '/tag/:id',
+    name: 'TagNews',
+    component: () => import('../views/TagNews.vue'),
+    meta: {
+      title: '标签',
+      keepAlive: false
+    }
+  },
+  {
     path: '/search',
     name: 'Search',
     component: () => import('../views/Search.vue'),
@@ -85,6 +94,16 @@ const routes = [
       title: '新闻管理',
       keepAlive: false,
       // 真正的权限校验在后端 /api/admin/*；这里只做前端体验拦截
+      requiresAdmin: true
+    }
+  },
+  {
+    path: '/admin/dashboard',
+    name: 'AdminDashboard',
+    component: () => import('../views/AdminDashboard.vue'),
+    meta: {
+      title: '数据看板',
+      keepAlive: false,
       requiresAdmin: true
     }
   },
