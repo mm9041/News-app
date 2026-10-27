@@ -11,12 +11,18 @@
     <div class="detail-content" v-if="newsStore.newsDetail.id">
       <div class="title-container">
         <h1 class="title">{{ newsStore.newsDetail.title }}</h1>
-        <van-button 
-          class="favorite-btn" 
-          :icon="isFavorite ? 'star' : 'star-o'" 
-          :class="{ 'is-favorite': isFavorite }"
-          @click="toggleFavorite"
-        />
+        <div class="title-actions">
+          <div class="like-btn" :class="{ 'is-liked': liked }" @click="toggleLike">
+            <van-icon :name="liked ? 'good-job' : 'good-job-o'" size="20" />
+            <span class="like-count">{{ likes }}</span>
+          </div>
+          <van-button
+            class="favorite-btn"
+            :icon="isFavorite ? 'star' : 'star-o'"
+            :class="{ 'is-favorite': isFavorite }"
+            @click="toggleFavorite"
+          />
+        </div>
       </div>
       
       <div class="info">
@@ -25,13 +31,6 @@
         <span>{{ newsStore.newsDetail.views }} 阅读</span>
       </div>
 
-      <div class="like-row">
-        <div class="like-btn" :class="{ 'is-liked': liked }" @click="toggleLike">
-          <van-icon :name="liked ? 'good-job' : 'good-job-o'" size="18" />
-          <span>{{ likes }} 赞</span>
-        </div>
-      </div>
-      
       <div class="cover" v-if="newsStore.newsDetail.image">
         <img :src="newsStore.newsDetail.image" :alt="newsStore.newsDetail.title" @error="onImageError">
       </div>
@@ -400,8 +399,6 @@ watch(newsId, (newId, oldId) => {
 }
 
 .favorite-btn {
-  flex-shrink: 0;
-  margin-left: 10px;
   padding: 0;
   width: 36px;
   height: 36px;
@@ -485,28 +482,34 @@ watch(newsId, (newId, oldId) => {
   flex: 1;
 }
 /* ---------------------------- 点赞 ---------------------------- */
-.like-row {
+.title-actions {
   display: flex;
-  justify-content: center;
-  padding: 8px 0 16px;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 10px;
+  margin-top: 2px;
 }
 
 .like-btn {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 6px 18px;
-  border: 1px solid #dcdee0;
-  border-radius: 999px;
-  font-size: 13px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
   color: #646566;
-  transition: all 0.2s;
+  transition: color 0.2s;
 }
 
 .like-btn.is-liked {
-  border-color: #ee0a24;
   color: #ee0a24;
-  background-color: #fff0f1;
+}
+
+.like-count {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1;
 }
 
 /* ---------------------------- 评论 ---------------------------- */
