@@ -435,8 +435,12 @@ onActivated(() => {
 }
 
 .message {
-  margin-bottom: 10px;
+  /* 块级元素默认 width:auto 会先撑满整行，再被 max-width 压到 80%，
+     结果短消息的气泡也是满宽。fit-content 让宽度真正跟着内容走，
+     只有长内容才会触到 max-width 并换行。 */
+  width: fit-content;
   max-width: 80%;
+  margin-bottom: 10px;
 }
 
 .user-message {
@@ -448,9 +452,32 @@ onActivated(() => {
 }
 
 .message-content {
-  padding: 10px;
+  padding: 9px 12px;
   border-radius: 10px;
+  line-height: 1.6;
   word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Markdown 渲染出来的 p / ul 自带上下 margin，会把气泡撑得很空，
+   这里只保留段落之间的间距，首尾贴边 */
+.message-content p {
+  margin: 0 0 6px;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.message-content ul,
+.message-content ol {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.message-content ul:last-child,
+.message-content ol:last-child {
+  margin-bottom: 0;
 }
 
 .user-message .message-content {
@@ -485,6 +512,9 @@ onActivated(() => {
   padding: 10px;
   border-radius: 5px;
   overflow-x: auto;
+  /* 代码块不能被 max-width 撑破，横向滚动交给 overflow-x */
+  max-width: 100%;
+  margin: 6px 0;
 }
 
 .message-content code {
