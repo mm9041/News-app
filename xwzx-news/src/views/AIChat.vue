@@ -1,6 +1,13 @@
 <template>
   <div class="ai-chat-container">
-    <van-nav-bar title="AI问答" fixed />
+    <van-nav-bar title="AI问答" fixed>
+      <template #left>
+        <span class="nav-action" @click="openHistory">历史</span>
+      </template>
+      <template #right>
+        <span class="nav-action" @click="startNewChat">新对话</span>
+      </template>
+    </van-nav-bar>
     
     <div class="login-tip" v-if="!isLogin" @click="goToLogin">
       登录后即可与 AI 对话，聊天记录会保存到你的账号
@@ -46,6 +53,34 @@
       </div>
     </div>
     
+    <van-popup
+      v-model:show="showHistory"
+      position="left"
+      :style="{ width: '80%', height: '100%' }"
+    >
+      <div class="history-panel">
+        <div class="history-header">
+          <span>历史对话</span>
+          <span class="history-new" @click="startNewChat">+ 新对话</span>
+        </div>
+
+        <div v-if="conversations.length" class="conv-list">
+          <div
+            v-for="conv in conversations"
+            :key="conv.id"
+            class="conv-item"
+            :class="{ 'is-active': conv.id === conversationId }"
+            @click="selectConversation(conv)"
+          >
+            <div class="conv-title">{{ conv.title }}</div>
+            <div class="conv-meta">{{ conv.messageCount }} 轮 · {{ formatTime(conv.updatedAt) }}</div>
+            <span class="conv-delete" @click.stop="removeConversation(conv)">删除</span>
+          </div>
+        </div>
+        <van-empty v-else description="还没有历史对话" image-size="60" />
+      </div>
+    </van-popup>
+
     <tab-bar />
   </div>
 </template>
@@ -57,7 +92,7 @@ import http from '../api/http';
 import TabBar from '../components/TabBar.vue';
 import * as marked from 'marked';
 import DOMPurify from 'dompurify';
-import { showToast } from 'vant';
+import { showConfirmDialog, showToast } from 'vant';
 import { useUserStore } from '../store/user';
 import { aiChatConfig } from '../config/api';
 
@@ -78,56 +113,107 @@ const isLoading = ref(false);
 // 统一走后端代理 /api/ai/chat，API Key 不再出现在前端
 const chatEndpoint = aiChatConfig.chatEndpoint;
 
-// 历史是否已拉取。本页是 keep-alive 缓存的，onActivated 会反复触发，用它防重复追加
+// 当前会话 id；null 表示还没开始（发送第一条消息时后端会创建，并从响应头回传）
+const conversationId = ref(null);
+const conversations = ref([]);
+const showHistory = ref(false);
+const historyLoading = ref(false);
+const defaultGreeting = '你好！我是AI助手，有什么可以帮助你的吗？';
+
+// 本页是 keep-alive 缓存的，onMounted 与 onActivated 会在同一个 tick 里先后触发，
+// 用它防重复初始化（置位必须在 await 之前）
 const historyLoaded = ref(false);
 
 // 格式化消息内容（支持Markdown）
 const formatMessage = (content) => {
   if (!content) return '';
-  // 使用marked解析Markdown，并用DOMPurify清理HTML
   return DOMPurify.sanitize(marked.parse(content));
 };
 
-// 进页面时加载历史对话
-const loadHistory = async () => {
-  if (historyLoaded.value) return;
-  // 未登录既没有历史可拉，也不该发这个请求
-  if (!isLogin.value || !userStore.token) return;
+const formatTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 16) : '');
 
-  // 必须在 await 之前就置位：首次进入已登录的页面时，onMounted 与 onActivated
-  // 会在**同一个 tick** 里先后触发，两次调用都会走到这里。若是等 axios 返回后才置位，
-  // 两次都能通过上面的守卫 → 请求发两次、历史对话被追加两遍（页面上整段重复）。
+const loadConversations = async () => {
+  if (!isLogin.value) return;
+  try {
+    const res = await http.get('/api/ai/conversations', { params: { page: 1, pageSize: 30 } });
+    conversations.value = res.data?.data?.list || [];
+  } catch (error) {
+    console.error('加载会话列表失败:', error);
+  }
+};
+
+const openHistory = async () => {
+  if (!isLogin.value) {
+    showToast('请先登录');
+    return;
+  }
+  showHistory.value = true;
+  await loadConversations();
+};
+
+const selectConversation = async (conv) => {
+  if (historyLoading.value) return;
+  historyLoading.value = true;
+  try {
+    const res = await http.get(`/api/ai/conversations/${conv.id}`);
+    const list = res.data?.data?.messages || [];
+
+    messages.value = [
+      { role: 'assistant', content: defaultGreeting },
+      ...list.map(item => ({ role: item.role, content: item.content }))
+    ];
+    conversationId.value = conv.id;
+    showHistory.value = false;
+
+    await nextTick();
+    scrollToBottom();
+  } catch (error) {
+    console.error('加载会话失败:', error);
+  } finally {
+    historyLoading.value = false;
+  }
+};
+
+const startNewChat = () => {
+  conversationId.value = null;
+  messages.value = [{ role: 'assistant', content: defaultGreeting }];
+  userInput.value = '';
+  showHistory.value = false;
+};
+
+const removeConversation = async (conv) => {
+  try {
+    await showConfirmDialog({ title: '删除对话', message: '删除后不可恢复，确定删除？' });
+  } catch (error) {
+    return;
+  }
+
+  try {
+    await http.delete(`/api/ai/conversations/${conv.id}`);
+    conversations.value = conversations.value.filter(item => item.id !== conv.id);
+    if (conversationId.value === conv.id) {
+      startNewChat();
+    }
+    showToast('已删除');
+  } catch (error) {
+    // 拦截器已提示
+  }
+};
+
+// 进页面：拉到会话列表后自动打开最近一次对话，没有就停在欢迎语
+const initConversation = async () => {
+  if (historyLoaded.value) return;
+  if (!isLogin.value || !userStore.token) return;
   historyLoaded.value = true;
 
   try {
-    const response = await http.get('/api/ai/history', {
-      params: { page: 1, pageSize: 20 }
-    });
-
-    if (response.data?.code !== 200) return;
-
-    // 后端按时间倒序返回（最新的在前），这里反转成时间正序再渲染
-    const list = response.data.data?.list || [];
-    const restored = [];
-    list.slice().reverse().forEach((item) => {
-      restored.push({ role: 'user', content: item.message });
-      restored.push({ role: 'assistant', content: item.response });
-    });
-
-    if (restored.length) {
-      // 欢迎语保留在最前面，历史对话接在它后面
-      messages.value = [...messages.value, ...restored];
-      await nextTick();
-      scrollToBottom();
+    await loadConversations();
+    const latest = conversations.value[0];
+    if (latest) {
+      await selectConversation(latest);
     }
   } catch (error) {
-    if (error.response?.status === 401) {
-      // token 失效：清掉本地登录态，未登录提示条会重新出现
-      userStore.logout();
-    }
-    // 拉历史失败不该阻断聊天。放开标志，下次进页面会重试
     historyLoaded.value = false;
-    console.error('加载历史对话失败:', error);
   }
 };
 
@@ -203,7 +289,8 @@ const fetchAIResponse = async (userMessage) => {
       },
       body: JSON.stringify({
         messages: allMessages,
-        stream: true
+        stream: true,
+        conversationId: conversationId.value || undefined
       })
     });
     
@@ -213,6 +300,12 @@ const fetchAIResponse = async (userMessage) => {
       showToast('登录已过期，请重新登录');
       router.push('/login');
       throw new Error('登录已过期，请重新登录');
+    }
+
+    // 首次对话时后端会新建会话，并通过响应头把 id 回传，前端无需额外请求
+    const convHeader = response.headers.get('X-Conversation-Id');
+    if (convHeader) {
+      conversationId.value = Number(convHeader);
     }
 
     if (!response.ok) {
@@ -291,13 +384,13 @@ watch(messages, () => {
 // 组件挂载时滚动到底部，并拉取历史对话
 onMounted(() => {
   scrollToBottom();
-  loadHistory();
+  initConversation();
 });
 
 // 本页被 keep-alive 缓存，从别的页面切回来时 onMounted 不会再执行，这里补一次
-// （loadHistory 内部有 historyLoaded 守卫，未登录时也会自己退出，重复调用是安全的）
+// （initConversation 内部有 historyLoaded 守卫，未登录时也会自己退出，重复调用是安全的）
 onActivated(() => {
-  loadHistory();
+  initConversation();
 });
 </script>
 
@@ -463,5 +556,72 @@ onActivated(() => {
 :deep(a) {
   color: #1989fa;
   text-decoration: none;
+}
+/* ---------------------------- 会话历史 ---------------------------- */
+.nav-action {
+  color: #1989fa;
+  font-size: 14px;
+}
+
+.history-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #fff;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #323233;
+  border-bottom: 1px solid #f2f3f5;
+}
+
+.history-new {
+  font-size: 13px;
+  font-weight: normal;
+  color: #1989fa;
+}
+
+.conv-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.conv-item {
+  position: relative;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f7f8fa;
+}
+
+.conv-item.is-active {
+  background-color: #f2f8ff;
+}
+
+.conv-title {
+  padding-right: 48px;
+  font-size: 14px;
+  color: #323233;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #c8c9cc;
+}
+
+.conv-delete {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  font-size: 12px;
+  color: #ee0a24;
 }
 </style>

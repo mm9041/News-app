@@ -11,7 +11,15 @@ from config import ai_conf
 from config.db_conf import AsyncSessionLocal, get_database
 from crud import ai_chat
 from models.users import User
-from schemas.ai import AiChatItemResponse, AiChatListResponse
+from schemas.ai import (
+    AiChatItemResponse,
+    AiChatListResponse,
+    ChatMessageItem,
+    ConversationCreateRequest,
+    ConversationDetailResponse,
+    ConversationItemResponse,
+    ConversationListResponse,
+)
 from utils.auth import get_current_user
 from utils.logger import get_logger
 from utils.rate_limit import enforce
@@ -35,6 +43,8 @@ class ChatRequest(BaseModel):
     stream: bool = True
     # 默认用配置里的模型，也允许请求单独指定 —— 但必须在白名单内
     model: Optional[str] = Field(None, max_length=100)
+    # 所属会话；为空时后端自动新建一个（并把标题设成首条提问）
+    conversation_id: Optional[int] = Field(None, ge=1, alias="conversationId")
 
     @model_validator(mode="after")
     def _check_total_length(self):
@@ -116,7 +126,24 @@ def _last_user_message(req: ChatRequest) -> str:
     return ""
 
 
-async def _save_chat_record(user_id: int, message: str, response: str) -> None:
+async def _ensure_conversation(user_id: int, conversation_id: Optional[int], first_message: str) -> int:
+    """校验会话归属，没有就新建。返回会话 id。"""
+    async with AsyncSessionLocal() as db:
+        if conversation_id:
+            conv = await ai_chat.get_conversation(db, conversation_id, user_id)
+            if not conv:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在"
+                )
+            return conv.id
+
+        conv = await ai_chat.create_conversation(db, user_id, (first_message or "")[:30])
+        return conv.id
+
+
+async def _save_chat_record(
+        user_id: int, message: str, response: str, conversation_id: Optional[int] = None
+) -> None:
     """把一轮问答落库。
 
     这里**单独开一个短 session**，不复用请求级的 Depends(get_database)：
@@ -124,7 +151,10 @@ async def _save_chat_record(user_id: int, message: str, response: str) -> None:
     """
     try:
         async with AsyncSessionLocal() as db:
-            await ai_chat.save_chat(db, user_id, message, response)
+            await ai_chat.save_chat(db, user_id, message, response, conversation_id)
+            if conversation_id:
+                # 插 ai_chat 不会触发 ai_conversation 的 ON UPDATE，这里手动 touch
+                await ai_chat.touch_conversation(db, conversation_id)
     except Exception as e:
         # 落库失败不能影响已经/正在返回给用户的回答
         logger.error("保存 AI 聊天记录失败：%s", e)
@@ -156,6 +186,9 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
             detail="大模型未配置，请检查 .env 中的 AI_CHAT_URL 与 AI_API_KEY"
         )
 
+    # 会话：没传就按首条提问新建，传了就校验归属（别人的会话查不到 → 404）
+    conversation_id = await _ensure_conversation(user.id, req.conversation_id, user_message)
+
     if not req.stream:
         async with httpx.AsyncClient(timeout=ai_conf.AI_TIMEOUT) as client:
             resp = await client.post(ai_conf.AI_CHAT_URL, json=payload, headers=headers)
@@ -167,8 +200,12 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
         data = resp.json()
         content = _extract_content(data)
         if user_message and content:
-            await _save_chat_record(user.id, user_message, content)
-        return {"code": 200, "message": "success", "data": {"content": content}}
+            await _save_chat_record(user.id, user_message, content, conversation_id)
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {"content": content, "conversationId": conversation_id},
+        }
 
     async def event_stream():
         collected: List[str] = []
@@ -190,7 +227,7 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
             # 兜底也写一次：用户中途关掉页面时，已经生成的部分照样存下来
             answer = "".join(collected)
             if user_message and answer:
-                await _save_chat_record(user.id, user_message, answer)
+                await _save_chat_record(user.id, user_message, answer, conversation_id)
 
     return StreamingResponse(
         event_stream(),
@@ -199,6 +236,8 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # 让 nginx 之类的反向代理不要缓冲 SSE
+            # 前端在流开始前就能从响应头拿到会话 id，不用额外发一次「创建会话」请求
+            "X-Conversation-Id": str(conversation_id),
         }
     )
 
@@ -223,3 +262,76 @@ async def get_history(
         has_more=has_more,
     )
     return success_response(data=data, message="获取聊天记录成功")
+
+
+# ---------------------------------------------------------------- 会话管理
+
+
+@router.post("/conversations")
+async def create_conversation(
+        data: ConversationCreateRequest,
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    conv = await ai_chat.create_conversation(db, user.id, data.title or "新对话")
+    return success_response(data={"id": conv.id, "title": conv.title}, message="创建成功")
+
+
+@router.get("/conversations")
+async def list_conversations(
+        page: int = Query(1, ge=1),
+        page_size: int = Query(20, ge=1, le=50, alias="pageSize"),
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    """只返回有消息的会话；点过「新对话」但没提问的不会出现。"""
+    skip = (page - 1) * page_size
+    rows, total = await ai_chat.list_conversations(db, user.id, skip, page_size)
+
+    items = [
+        ConversationItemResponse(
+            id=conv.id,
+            title=conv.title,
+            message_count=count,
+            updated_at=conv.updated_at,
+        )
+        for conv, count in rows
+    ]
+    data = ConversationListResponse(
+        list=items, total=total, has_more=total > skip + len(items)
+    )
+    return success_response(data=data, message="获取会话列表成功")
+
+
+@router.get("/conversations/{conversation_id}")
+async def get_conversation(
+        conversation_id: int,
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    conv = await ai_chat.get_conversation(db, conversation_id, user.id)
+    if not conv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
+
+    messages = await ai_chat.list_messages(db, conv.id)
+    items = [
+        ChatMessageItem(role=m["role"], content=m["content"], created_at=m["createdAt"])
+        for m in messages
+    ]
+    data = ConversationDetailResponse(id=conv.id, title=conv.title, messages=items)
+    return success_response(data=data, message="获取会话成功")
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(
+        conversation_id: int,
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    conv = await ai_chat.get_conversation(db, conversation_id, user.id)
+    if not conv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
+
+    # ai_chat.conversation_id 是 CASCADE，消息一起删
+    await ai_chat.delete_conversation(db, conv)
+    return success_response(message="删除成功")

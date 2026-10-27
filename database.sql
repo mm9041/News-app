@@ -137,10 +137,29 @@ CREATE TABLE IF NOT EXISTS `history` (
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='浏览历史表';
 
+-- ----------------------------
+-- AI 会话表
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `ai_conversation` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '会话ID',
+  `user_id` INT UNSIGNED NOT NULL COMMENT '用户ID',
+  `title` VARCHAR(100) NOT NULL DEFAULT '新对话' COMMENT '会话标题（取首条提问）',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后活跃时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_conv_user` (`user_id` ASC, `updated_at` DESC, `id` DESC),
+  CONSTRAINT `fk_conv_user`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `user` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI会话表';
+
 -- AI聊天记录表（Agent）
 CREATE TABLE IF NOT EXISTS `ai_chat` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '聊天记录ID',
   `user_id` INT UNSIGNED NOT NULL COMMENT '用户ID',
+  `conversation_id` INT UNSIGNED NULL DEFAULT NULL COMMENT '所属会话ID',
   `message` TEXT NOT NULL COMMENT '用户消息',
   `response` TEXT NOT NULL COMMENT 'AI回复',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -151,6 +170,11 @@ CREATE TABLE IF NOT EXISTS `ai_chat` (
   CONSTRAINT `fk_ai_chat_user`
     FOREIGN KEY (`user_id`)
     REFERENCES `user` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_ai_chat_conv`
+    FOREIGN KEY (`conversation_id`)
+    REFERENCES `ai_conversation` (`id`)
     ON DELETE CASCADE
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI聊天记录表';

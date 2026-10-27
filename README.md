@@ -131,6 +131,10 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | GET/POST/DELETE | `/api/history/*` | 是 | 历史增删/列表/清空 |
 | POST | `/api/ai/chat` | 是 | AI 对话（SSE），限 20 次/分 |
 | GET | `/api/ai/history?page&pageSize` | 是 | 聊天记录（倒序） |
+| POST | `/api/ai/conversations` | 是 | 新建会话 |
+| GET | `/api/ai/conversations?page` | 是 | 会话列表（只含有消息的） |
+| GET | `/api/ai/conversations/{id}` | 是 | 会话的消息流 |
+| DELETE | `/api/ai/conversations/{id}` | 是 | 删除会话（级联删消息） |
 | GET | `/api/admin/news?page&pageSize&keyword` | 管理员 | 后台新闻列表（**含正文**） |
 | GET | `/api/admin/news/{id}` | 管理员 | 单条详情（编辑回填用） |
 | POST | `/api/admin/news` | 管理员 | 新建新闻 |
@@ -158,6 +162,10 @@ python scripts/make_admin.py <用户名>
 ## 几个设计要点
 
 - **阅读量**：详情页只 `INCR view:delta:{id}`，不写库也不清列表缓存；读的时候 `库内值 + 未回写增量`；后台每 30 秒批量回写并 `DECRBY`。Redis 不可用时退回直写数据库。列表缓存里存的是**数据库原值**，否则命中缓存会把同一份增量重复累加。
+- **AI 会话**：`ai_conversation` + `ai_chat.conversation_id`，一个会话下多轮问答。
+  首次提问时后端自动建会话（标题取首条提问前 30 字），并把 id 通过 SSE 响应头
+  `X-Conversation-Id` 回传，前端不用额外发一次「创建会话」请求。
+  历史数据由 `scripts/migrate_ai_conversations.py` 按「同用户 + 间隔 30 分钟」补了会话。
 - **缓存**：分类 2h、列表 30min、**详情 2~3 分钟（TTL 带随机抖动）**，读时回填。
   详情缓存顺带处理了三件事：查不到的 id 写 30 秒空值缓存（防穿透）、
   过期瞬间用 Redis 互斥锁只放一个请求回源（防击穿）、TTL 加抖动避免同批失效（防雪崩）。
