@@ -574,5 +574,7 @@ INSERT INTO `news` (`title`, `description`, `content`, `image`, `author`, `categ
 ('全球黄金投资需求旺盛', 'ETF资金流入创纪录', '2023年Q2全球黄金ETF资金流入达300吨，创历史新高。央行购金和避险需求推动。金价上涨15%，达2000美元/盎司。分析师认为，地缘政治风险将维持黄金吸引力。黄金投资占全球投资组合比例升至10%。黄金作为避险资产价值凸显。', 'https://picsum.photos/id/422/200/200', 'Gold Market Analyst', 8, '2023-08-22 15:35:00', 15800),
 ('中国快递业务量突破1000亿件', '数字化转型提速', '7月快递业务量达105亿件，同比增长18%。智能分拣、无人配送技术应用率提升至40%。顺丰、京东物流数字化投入增加。专家称，快递业数字化转型将提升效率。快递单价下降5%，但服务质量提升。预计全年业务量将超1200亿件。', 'https://picsum.photos/id/423/200/200', 'Logistics Analyst', 8, '2023-08-23 10:50:00', 17200);
 -- 创建测试用户
-INSERT INTO `user` (`username`, `password`, `nickname`, `gender`, `bio`) VALUES 
-('admin', '$2b$12$TKevPbXcGL6Q1WdaFKbLhuueBuLfLyhkdk/0ESBvBv7X74.rNwiNm', '测试用户', 'unknown', '这是一个测试账号');
+-- 本地开发账号：admin / admin，已授予管理员权限（is_admin=1）。
+-- ⚠️ 这是弱密码，仅供本地调试；任何对外部署前都必须改掉。
+INSERT INTO `user` (`username`, `password`, `nickname`, `gender`, `bio`, `is_admin`) VALUES 
+('admin', '$2b$12$KqaA/gs.RAhrLEVZkDykRuJqw1G/H9TJq3FQ3XB0ZCQpFhDlKoKay', '测试用户', 'unknown', '这是一个测试账号', 1);
