@@ -56,15 +56,7 @@ async def is_following(db: AsyncSession, user_id: int, target_type: str, target_
 
 
 async def list_follows(db: AsyncSession, user_id: int, target_type: str):
-    """我关注的所有目标。作者类带出昵称/头像；分类类带出名称。"""
-    from models.news_category import NewsCategory
-
-    stmt = (
-        select(Follow.target_id, NewsCategory.name)
-        .join(NewsCategory, NewsCategory.id == Follow.target_id)
-        .where(Follow.user_id == user_id, Follow.target_type == "category")
-    )
-    # category 名称通过子查询合并进来，作者用 LEFT JOIN
+    """我关注的作者，带各自的评论数。分类的关注在分类页展示，这里只返回作者。"""
     author_rows = await db.execute(
         select(
             Follow.target_id,
@@ -80,7 +72,7 @@ async def list_follows(db: AsyncSession, user_id: int, target_type: str):
         .group_by(Follow.target_id, User.nickname, User.username, User.avatar)
     )
 
-    authors = [
+    return [
         {
             "id": target_id,
             "nickname": nickname or username,
@@ -89,8 +81,6 @@ async def list_follows(db: AsyncSession, user_id: int, target_type: str):
         }
         for target_id, nickname, username, avatar, count in author_rows.all()
     ]
-    _ = stmt, NewsCategory  # category 列表由前端通过分类接口展示，这里只返回作者
-    return authors
 
 
 async def followed_author_ids(db: AsyncSession, user_id: int) -> list[int]:

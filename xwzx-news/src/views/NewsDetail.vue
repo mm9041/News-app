@@ -17,12 +17,12 @@
             <span class="like-count">{{ likes }}</span>
           </div>
           <div
-            v-if="canFollowAuthor"
+            v-if="followTarget"
             class="follow-author-btn"
-            :class="{ 'is-following': followingAuthor }"
-            @click="toggleFollowAuthor"
+            :class="{ 'is-following': isFollowing }"
+            @click="toggleFollow"
           >
-            {{ followingAuthor ? '已关注' : '关注' }}
+            {{ isFollowing ? '已关注' : `关注${followTarget.label}` }}
           </div>
           <van-button
             class="favorite-btn"
@@ -259,19 +259,19 @@ const loadDetail = async () => {
   likes.value = newsStore.newsDetail.likes || 0
   liked.value = Boolean(newsStore.newsDetail.isLiked)
 
-  // 关注状态：只在「这条新闻有发布者」时查询
-  const authorId = newsStore.newsDetail.authorId
-  if (authorId && userStore.getLoginStatus && authorId !== userStore.userInfo?.id) {
+  // 关注状态跟着当前目标（作者或分类）走
+  const target = followTarget.value
+  if (target && userStore.getLoginStatus) {
     try {
       const res = await http.get('/api/follow/status', {
-        params: { targetType: 'user', targetId: authorId }
+        params: { targetType: target.type, targetId: target.id }
       })
-      followingAuthor.value = Boolean(res.data?.data?.following)
+      isFollowing.value = Boolean(res.data?.data?.following)
     } catch (error) {
-      followingAuthor.value = false
+      isFollowing.value = false
     }
   } else {
-    followingAuthor.value = false
+    isFollowing.value = false
   }
 
   // 添加到浏览历史
@@ -337,19 +337,26 @@ const toggleLike = async () => {
 
 // ---------------------------- 关注作者 ----------------------------
 
-const followingAuthor = ref(false)
+const isFollowing = ref(false)
 const followLoading = ref(false)
 
-const canFollowAuthor = computed(() => {
-  const authorId = newsStore.newsDetail.authorId
-  if (!authorId) return false
-  // 自己发的新闻不显示关注按钮；未登录也可以显示（点了引导登录）
-  return authorId !== userStore.userInfo?.id
+// 关注目标：优先作者；新闻没有发布者（历史种子数据的 user_id 是 NULL）时退而关注分类。
+// 自己发的新闻不显示按钮。
+const followTarget = computed(() => {
+  const detail = newsStore.newsDetail
+  if (detail.authorId) {
+    if (detail.authorId === userStore.userInfo?.id) return null
+    return { type: 'user', id: detail.authorId, label: '作者' }
+  }
+  if (detail.categoryId) {
+    return { type: 'category', id: detail.categoryId, label: '分类' }
+  }
+  return null
 })
 
-const toggleFollowAuthor = async () => {
-  const authorId = newsStore.newsDetail.authorId
-  if (!authorId) return
+const toggleFollow = async () => {
+  const target = followTarget.value
+  if (!target) return
 
   if (!userStore.getLoginStatus) {
     showToast('请先登录')
@@ -360,19 +367,19 @@ const toggleFollowAuthor = async () => {
 
   followLoading.value = true
   try {
-    if (followingAuthor.value) {
+    if (isFollowing.value) {
       await http.delete('/api/follow', {
-        data: { targetType: 'user', targetId: authorId }
+        data: { targetType: target.type, targetId: target.id }
       })
-      followingAuthor.value = false
+      isFollowing.value = false
       showToast('已取消关注')
     } else {
       await http.post('/api/follow', {
-        targetType: 'user',
-        targetId: authorId
+        targetType: target.type,
+        targetId: target.id
       })
-      followingAuthor.value = true
-      showToast('已关注作者')
+      isFollowing.value = true
+      showToast(`已关注${target.label}`)
     }
   } catch (error) {
     // 拦截器已提示
