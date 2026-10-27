@@ -5,6 +5,9 @@ from sqlalchemy import DateTime, Integer, String, Index, ForeignKey, Text, Uniqu
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, TimestampMixin, UnsignedInt
+# news.source_id 的 ForeignKey 指向 source 表：必须让 SQLAlchemy 的 metadata
+# 看到这张表，否则 News 的任何 flush 都会报 NoReferencedTableError
+from models.source import Source  # noqa: F401
 
 
 class Category(Base, TimestampMixin):
@@ -39,6 +42,7 @@ class News(Base, TimestampMixin):
         # 发布者：后台创建新闻时记当前管理员，用来给「我的新闻被评论/点赞」发通知。
         # 历史种子数据这一列是 NULL，不会产生通知。
         Index("fk_news_user_idx", "user_id"),
+        Index("idx_news_source", "source_id"),
     )
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="新闻ID")
     title: Mapped[str] = mapped_column(String(255), nullable=False, comment="新闻标题")
@@ -46,6 +50,10 @@ class News(Base, TimestampMixin):
     content: Mapped[str] = mapped_column(Text, nullable=False, comment="新闻内容")
     image: Mapped[Optional[str]] = mapped_column(String(255), comment="新闻图片")
     author: Mapped[Optional[str]] = mapped_column(String(50), comment="作者")
+    # 报纸来源：作者是一篇的署名，报纸是一批新闻的出处；关注报纸能看到关注流
+    source_id: Mapped[Optional[int]] = mapped_column(
+        UnsignedInt, ForeignKey("source.id", ondelete="SET NULL"), nullable=True, comment="报纸来源ID"
+    )
     category_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("news_category.id"), nullable=False, comment="分类ID")
     user_id: Mapped[Optional[int]] = mapped_column(
         UnsignedInt, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, comment="发布者ID"

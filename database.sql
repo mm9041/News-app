@@ -89,6 +89,11 @@ CREATE TABLE IF NOT EXISTS `news` (
     FOREIGN KEY (`user_id`)
     REFERENCES `user` (`id`)
     ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_news_source`
+    FOREIGN KEY (`source_id`)
+    REFERENCES `source` (`id`)
+    ON DELETE SET NULL
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='新闻表';
 

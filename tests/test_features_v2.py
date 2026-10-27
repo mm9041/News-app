@@ -192,3 +192,44 @@ def test_stats_shape(client, admin_user):
     assert len(data["trend"]) == 7
     assert data["overview"]["news"] > 0
     assert data["categories"]
+
+
+# ---------------------------------------------------------------- 报纸关注
+
+
+def test_follow_source_and_feed(client, temp_user):
+    """关注报纸 → 列表可见 → 关注流包含该报纸的新闻 → 取关。"""
+    headers = _auth(temp_user)
+
+    try:
+        resp = client.post("/api/follow", json={"targetType": "source", "targetId": 1}, headers=headers)
+        assert resp.status_code == 200
+
+        sources = client.get("/api/follow/sources", headers=headers).json()["data"]
+        assert any(s["id"] == 1 and s["name"] == "海南日报" and s["newsCount"] > 0 for s in sources)
+
+        feed = client.get(
+            "/api/follow/feed", params={"page": 1, "pageSize": 50}, headers=headers
+        ).json()["data"]
+        # 海南日报有 40 条种子新闻，关注流必须能拿到
+        assert feed["total"] >= 40
+        assert feed["list"]
+
+        status_data = client.get(
+            "/api/follow/status",
+            params={"targetType": "source", "targetId": 1},
+            headers=headers,
+        ).json()["data"]
+        assert status_data["following"] is True
+
+        # 幂等：重复关注不报错也不重复计数
+        client.post("/api/follow", json={"targetType": "source", "targetId": 1}, headers=headers)
+        sources_again = client.get("/api/follow/sources", headers=headers).json()["data"]
+        assert len([s for s in sources_again if s["id"] == 1]) == 1
+    finally:
+        client.request("DELETE", "/api/follow", json={"targetType": "source", "targetId": 1}, headers=headers)
+
+
+def test_news_detail_returns_source_id(client):
+    detail = client.get("/api/news/detail", params={"id": 1}).json()["data"]
+    assert detail["sourceId"] is not None

@@ -158,7 +158,9 @@ def _clear_rate_limit(prefix: str) -> None:
             socket_connect_timeout=0.5,
             socket_timeout=0.5,
         )
-        keys = list(r.scan_iter(f"rl:{prefix}:*"))
+        # 滑动窗口限流的 key 是 `rl:{prefix}`（不带 bucket 后缀）；
+        # 兼容旧固定窗口的 `rl:{prefix}:{bucket}`，两个模式都清
+        keys = list(r.scan_iter(f"rl:{prefix}:*")) + list(r.scan_iter(f"rl:{prefix}"))
         if keys:
             r.delete(*keys)
         r.close()

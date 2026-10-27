@@ -3,18 +3,18 @@
     <van-nav-bar title="关注" left-arrow fixed @click-left="goBack" />
 
     <div class="panel">
-      <div class="panel-title">关注的作者</div>
-      <div v-if="authors.length">
-        <div v-for="author in authors" :key="author.id" class="author-row">
-          <van-image round width="36" height="36" :src="author.avatar || defaultAvatar" />
+      <div class="panel-title">关注的报纸</div>
+      <div v-if="sources.length">
+        <div v-for="source in sources" :key="source.id" class="author-row">
+          <van-icon name="newspaper-o" size="26" class="source-icon" />
           <div class="author-info">
-            <div class="author-name">{{ author.nickname }}</div>
-            <div class="author-meta">{{ author.commentCount }} 条评论</div>
+            <div class="author-name">{{ source.name }}</div>
+            <div class="author-meta">{{ source.newsCount }} 条新闻</div>
           </div>
-          <van-button size="mini" plain type="primary" @click="unfollow('user', author.id)">取关</van-button>
+          <van-button size="mini" plain type="primary" @click="unfollow('source', source.id)">取关</van-button>
         </div>
       </div>
-      <div v-else class="empty-text">还没有关注的作者</div>
+      <div v-else class="empty-text">还没有关注的报纸</div>
     </div>
 
     <div class="panel">
@@ -43,17 +43,17 @@ const router = useRouter()
 const userStore = useUserStore()
 const defaultAvatar = 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg'
 
-const authors = ref([])
+const sources = ref([])
 const list = ref([])
 
 const goBack = () => router.back()
 
 const loadAll = async () => {
-  const [authorsRes, feedRes] = await Promise.all([
-    http.get('/api/follow/authors'),
+  const [sourcesRes, feedRes] = await Promise.all([
+    http.get('/api/follow/sources'),
     http.get('/api/follow/feed', { params: { page: 1, pageSize: 20 } }),
   ])
-  authors.value = authorsRes.data?.data || []
+  sources.value = sourcesRes.data?.data || []
   list.value = feedRes.data?.data?.list || []
 }
 
@@ -64,9 +64,9 @@ const unfollow = async (type, id) => {
     return
   }
   await http.delete('/api/follow', { data: { targetType: type, targetId: id } })
-  authors.value = authors.value.filter(item => item.id !== id)
+  sources.value = sources.value.filter(item => item.id !== id)
   showToast('已取消关注')
-  await loadAll()
+  loadAll()
 }
 
 onMounted(() => {

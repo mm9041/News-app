@@ -128,6 +128,7 @@ async def get_news_detail(
             "publishTime": news_detail.publish_time,
             "categoryId": news_detail.category_id,
             "authorId": news_detail.user_id,
+            "sourceId": news_detail.source_id,
             "views": views,
             "likes": likes,
             "isLiked": is_liked,

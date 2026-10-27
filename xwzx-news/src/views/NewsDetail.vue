@@ -340,17 +340,10 @@ const toggleLike = async () => {
 const isFollowing = ref(false)
 const followLoading = ref(false)
 
-// 关注目标：优先作者；新闻没有发布者（历史种子数据的 user_id 是 NULL）时退而关注分类。
-// 自己发的新闻不显示按钮。
+// 关注对象：报纸。每条新闻都有来源（种子数据已迁移到 10 家报纸），所以按钮始终可见
 const followTarget = computed(() => {
-  const detail = newsStore.newsDetail
-  if (detail.authorId) {
-    if (detail.authorId === userStore.userInfo?.id) return null
-    return { type: 'user', id: detail.authorId, label: '作者' }
-  }
-  if (detail.categoryId) {
-    return { type: 'category', id: detail.categoryId, label: '分类' }
-  }
+  const sourceId = newsStore.newsDetail.sourceId
+  if (sourceId) return { type: 'source', id: sourceId, label: '报纸' }
   return null
 })
 
@@ -379,7 +372,7 @@ const toggleFollow = async () => {
         targetId: target.id
       })
       isFollowing.value = true
-      showToast(`已关注${target.label}`)
+      showToast('已关注报纸')
     }
   } catch (error) {
     // 拦截器已提示

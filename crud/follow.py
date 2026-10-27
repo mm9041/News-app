@@ -12,7 +12,7 @@ from models.follow import Follow
 from models.news import News
 from models.users import User
 
-VALID_TYPES = ("user", "category")
+VALID_TYPES = ("user", "category", "source")
 
 
 async def add_follow(db: AsyncSession, user_id: int, target_type: str, target_id: int) -> bool:
@@ -92,6 +92,15 @@ async def followed_author_ids(db: AsyncSession, user_id: int) -> list[int]:
     return [row[0] for row in result.all()]
 
 
+async def followed_source_ids(db: AsyncSession, user_id: int) -> list[int]:
+    result = await db.execute(
+        select(Follow.target_id).where(
+            Follow.user_id == user_id, Follow.target_type == "source"
+        )
+    )
+    return [row[0] for row in result.all()]
+
+
 async def followed_category_ids(db: AsyncSession, user_id: int) -> list[int]:
     result = await db.execute(
         select(Follow.target_id).where(
@@ -105,12 +114,15 @@ async def feed(db: AsyncSession, user_id: int, skip: int, limit: int):
     """关注流：我关注的作者发的新闻 + 我关注的分类下的新闻，按发布时间倒序。"""
     author_ids = await followed_author_ids(db, user_id)
     category_ids = await followed_category_ids(db, user_id)
+    source_ids = await followed_source_ids(db, user_id)
 
     conditions = []
     if author_ids:
         conditions.append(News.user_id.in_(author_ids))
     if category_ids:
         conditions.append(News.category_id.in_(category_ids))
+    if source_ids:
+        conditions.append(News.source_id.in_(source_ids))
     if not conditions:
         return [], 0
 
@@ -128,3 +140,25 @@ async def feed(db: AsyncSession, user_id: int, skip: int, limit: int):
         .limit(limit)
     )
     return list((await db.execute(stmt)).scalars().all()), total
+
+
+async def list_followed_sources(db: AsyncSession, user_id: int):
+    """我关注的报纸，各带新闻数。"""
+    from models.source import Source
+
+    rows = await db.execute(
+        select(Source.id, Source.name, func.count(News.id))
+        .join(
+            Follow,
+            (Follow.target_type == "source")
+            & (Follow.target_id == Source.id)
+            & (Follow.user_id == user_id),
+        )
+        .outerjoin(News, News.source_id == Source.id)
+        .group_by(Source.id, Source.name)
+        .order_by(func.count(News.id).desc())
+    )
+    return [
+        {"id": source_id, "name": name, "newsCount": count}
+        for source_id, name, count in rows.all()
+    ]

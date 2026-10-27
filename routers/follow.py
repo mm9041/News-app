@@ -47,7 +47,7 @@ async def remove_follow(
 
 @router.get("/status")
 async def follow_status(
-        target_type: Literal["user", "category"] = Query(..., alias="targetType"),
+        target_type: Literal["user", "category", "source"] = Query(..., alias="targetType"),
         target_id: int = Query(..., ge=1, alias="targetId"),
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
@@ -82,3 +82,15 @@ async def follow_feed(
         data={"list": items, "total": total, "hasMore": total > skip + len(items)},
         message="获取关注流成功",
     )
+
+
+@router.get("/sources")
+async def list_followed_sources(
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    """我关注的报纸，各带新闻数。"""
+    from crud import follow as follow_crud
+
+    sources = await follow_crud.list_followed_sources(db, user.id)
+    return success_response(data=sources, message="获取关注的报纸成功")
