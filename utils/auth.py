@@ -6,6 +6,7 @@ from starlette import status
 
 from config.db_conf import get_database
 from crud import users
+from models.users import User
 
 
 async def get_current_user(
@@ -43,4 +44,18 @@ async def get_current_user(
             detail="无效的令牌或已经过期的令牌"
         )
 
+    return user
+
+
+async def get_current_admin(user: User = Depends(get_current_user)) -> User:
+    """管理后台专用依赖：先按普通用户鉴权，再校验管理员标记。
+
+    返回 403 而不是 401：身份是有效的，只是没有权限。
+    前端拿到 401 会清登录态并跳登录页，403 不应该触发这个逻辑。
+    """
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要管理员权限"
+        )
     return user

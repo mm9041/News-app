@@ -39,6 +39,7 @@
         <van-cell :title="$t('my.myFavorite')" is-link @click="goToFavorite" />
         <van-cell :title="$t('my.browsingHistory')" is-link @click="goToHistory" />
         <van-cell :title="$t('my.notifications')" is-link />
+        <van-cell v-if="userInfo?.isAdmin" title="新闻管理" is-link @click="goToAdminNews" />
         <van-cell :title="$t('my.settings')" is-link @click="goToSettings" />
         <van-cell v-if="isLogin" :title="$t('my.logout')" @click="handleLogout" />
       </van-cell-group>
@@ -79,6 +80,11 @@ const goToProfile = () => {
   if (isLogin.value) {
     router.push('/profile');
   }
+};
+
+// 新闻管理（入口只对管理员显示，路由守卫和后端还会各校验一次）
+const goToAdminNews = () => {
+  router.push('/admin/news');
 };
 
 // 跳转到浏览历史页面

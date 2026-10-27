@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.db_conf import get_database
-from crud import news_cache
+from crud import news_cache, news_search
+from schemas.base import NewsItemBase
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
@@ -41,6 +42,33 @@ async def get_news_list(
             "list": news_list,
             "total": total,
             "hasMore": has_more
+        }
+    }
+
+
+@router.get("/search")
+async def search_news(
+        keyword: str = Query(..., min_length=1, max_length=50),
+        page: int = Query(1, ge=1),
+        page_size: int = Query(10, ge=1, le=100, alias="pageSize"),
+        db: AsyncSession = Depends(get_database)
+):
+    """按关键词搜索标题/摘要/正文。
+
+    返回结构与列表接口一致（同样不含 content），前端可以复用列表组件。
+    """
+    skip = (page - 1) * page_size
+    rows, total = await news_search.search_news(db, keyword, skip, page_size)
+    items = [NewsItemBase.model_validate(row) for row in rows]
+    has_more = total > skip + len(items)
+    return {
+        "code": 200,
+        "message": "搜索成功",
+        "data": {
+            "list": items,
+            "total": total,
+            "hasMore": has_more,
+            "keyword": keyword.strip(),
         }
     }
 

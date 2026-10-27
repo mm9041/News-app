@@ -77,6 +77,27 @@ def temp_user(client):
             cur.execute("DELETE FROM `user` WHERE username=%s", (username,))
 
 
+@pytest.fixture
+def admin_user(client, temp_user, db):
+    """在 temp_user 基础上把 is_admin 置 1，并重新登录换一个带新状态的 token。
+
+    重新登录是必须的：create_token 是「每用户一条」，旧 token 会被覆盖；
+    而且登录响应里的 userInfo.isAdmin 来自重新查库，能反映刚才的 UPDATE。
+    """
+    with db.cursor() as cur:
+        cur.execute("UPDATE `user` SET is_admin=1 WHERE id=%s", (temp_user["user_id"],))
+
+    resp = client.post(
+        "/api/user/login",
+        json={"username": temp_user["username"], "password": temp_user["password"]},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["userInfo"]["isAdmin"] is True
+
+    return {**temp_user, "token": data["token"]}
+
+
 def _clear_rate_limit(prefix: str) -> None:
     """清掉指定前缀的限流 key。Redis 不可用时静默跳过。"""
     try:

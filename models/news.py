@@ -32,6 +32,10 @@ class News(Base, TimestampMixin):
         # ⚠️ 方向信息写在 database.sql 里（`publish_time DESC, id DESC`），
         # metadata 里只声明列，避免 create_all 与手工 DDL 打架。
         Index("idx_category_publish", "category_id", "publish_time", "id"),
+        # 中文全文检索：ngram 分词器（MySQL 8 内置）。
+        # ngram_token_size 默认 2，单字关键词 MATCH 不到，应用层会回退 LIKE。
+        Index("ft_news_search", "title", "description", "content",
+              mysql_prefix="FULLTEXT", mysql_with_parser="ngram"),
     )
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="新闻ID")
     title: Mapped[str] = mapped_column(String(255), nullable=False, comment="新闻标题")

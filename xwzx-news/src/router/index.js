@@ -69,6 +69,26 @@ const routes = [
     }
   },
   {
+    path: '/search',
+    name: 'Search',
+    component: () => import('../views/Search.vue'),
+    meta: {
+      title: '搜索',
+      keepAlive: false
+    }
+  },
+  {
+    path: '/admin/news',
+    name: 'AdminNews',
+    component: () => import('../views/AdminNews.vue'),
+    meta: {
+      title: '新闻管理',
+      keepAlive: false,
+      // 真正的权限校验在后端 /api/admin/*；这里只做前端体验拦截
+      requiresAdmin: true
+    }
+  },
+  {
     path: '/aichat',
     name: 'AIChat',
     component: () => import('../views/AIChat.vue'),

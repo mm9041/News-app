@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from cache import view_counter
 from crud.news_views import flush_view_deltas
-from routers import news, users, favorite, history, ai
+from routers import news, users, favorite, history, ai, admin
 from utils.exception_handlers import register_exception_handlers
 from utils.logger import get_logger, setup_logging
 from utils.middleware import RequestIdMiddleware
@@ -101,3 +101,4 @@ app.include_router(users.router)
 app.include_router(favorite.router)
 app.include_router(history.router)
 app.include_router(ai.router)
+app.include_router(admin.router)

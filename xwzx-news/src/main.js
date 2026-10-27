@@ -3,6 +3,7 @@ import App from './App.vue'
 import router from './router'
 import pinia from './store'
 import { bindTokenGetter, bindUnauthorizedHandler } from './api/http'
+import { setupGuard } from './router/guard'
 import { useUserStore } from './store/user'
 
 // 导入Vant组件库
@@ -25,7 +26,9 @@ import {
   Image,
   Toast,
   Icon,
-  Popup
+  Popup,
+  Picker,
+  Search
 } from 'vant'
 
 // 导入Vant样式
@@ -63,6 +66,8 @@ app.use(Image)
 app.use(Toast)
 app.use(Icon)
 app.use(Popup)
+app.use(Picker)
+app.use(Search)
 
 // 使用路由和状态管理
 app.use(router)
@@ -73,6 +78,9 @@ app.use(pinia)
 bindTokenGetter(() => useUserStore().token)
 // 401 时统一清掉登录态（跳转与提示在拦截器里做）
 bindUnauthorizedHandler(() => useUserStore().logout())
+
+// 管理员路由守卫（必须在 pinia 安装之后注册）
+setupGuard(router)
 
 app.mount('#app')
 

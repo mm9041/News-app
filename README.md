@@ -28,7 +28,9 @@ FastAPIProject/
 ├── schemas/                # Pydantic 请求/响应模型（camelCase alias 在这里桥接）
 ├── crud/                   # 数据访问层
 │   ├── news_cache.py       # 列表/详情/相关推荐
+│   ├── news_search.py      # 全文搜索（ngram + LIKE 兜底）
 │   ├── news_views.py       # 阅读量增量叠加与回写
+│   ├── admin_news.py       # 后台新闻读写（含缓存失效）
 │   └── ...
 ├── cache/                  # Redis 操作（分类、列表、阅读量计数）
 ├── routers/                # 路由
@@ -103,6 +105,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 |---|---|---|---|
 | GET | `/api/news/categories` | 否 | 分类列表（缓存 2h） |
 | GET | `/api/news/list?categoryId&page&pageSize` | 否 | 列表，按发布时间倒序 |
+| GET | `/api/news/search?keyword&page&pageSize` | 否 | 全文搜索（标题/摘要/正文） |
 | GET | `/api/news/detail?id` | 否 | 详情 + 相关推荐，并把阅读量 +1 |
 | POST | `/api/user/register` | 否 | 注册（限 5 次/分/IP） |
 | POST | `/api/user/login` | 否 | 登录（限 10 次/分/IP） |
@@ -113,8 +116,28 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | GET/POST/DELETE | `/api/history/*` | 是 | 历史增删/列表/清空 |
 | POST | `/api/ai/chat` | 是 | AI 对话（SSE），限 20 次/分 |
 | GET | `/api/ai/history?page&pageSize` | 是 | 聊天记录（倒序） |
+| GET | `/api/admin/news?page&pageSize&keyword` | 管理员 | 后台新闻列表（**含正文**） |
+| GET | `/api/admin/news/{id}` | 管理员 | 单条详情（编辑回填用） |
+| POST | `/api/admin/news` | 管理员 | 新建新闻 |
+| PUT | `/api/admin/news/{id}` | 管理员 | 更新（PUT 语义，整份覆盖） |
+| DELETE | `/api/admin/news/{id}` | 管理员 | 删除 |
 
 鉴权头：`Authorization: <token>`，带不带 `Bearer ` 前缀都行。
+
+## 管理后台
+
+管理接口要求 `user.is_admin = 1`。把某个用户设为管理员：
+
+```bash
+python scripts/make_admin.py <用户名>
+# 取消：python scripts/make_admin.py <用户名> --revoke
+```
+
+设置后该用户重新登录，「我的」页就会出现「新闻管理」入口（`/admin/news`），
+可以新建、编辑、删除新闻。**写操作会自动清掉对应分类的列表缓存**，前台立即可见。
+
+前端入口只是体验层拦截，真正的校验在后端 `get_current_admin`：
+未登录返回 401，登录了但不是管理员返回 403。
 
 ## 几个设计要点
 
@@ -123,6 +146,9 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 - **认证**：`user_token` 只存 `sha256(token)`，明文只在登录/注册响应里返回一次；7 天有效；每用户一条，重新登录会顶掉旧 token（多端互踢）。
 - **限流**：基于 Redis 固定窗口，Redis 故障时放行（保护措施不能把业务拦死）。
 - **前端请求**：统一走 `src/api/http.js`，token 由 `main.js` 注入，401 全局清登录态并跳登录页。
+- **搜索**：`news` 表上建了 ngram 全文索引，查询用 `BOOLEAN MODE` 的短语匹配。
+  单字关键词（`ngram_token_size=2` 切不出来）和英文短词（实测 `NASA` 的 MATCH 得分是 0）
+  会回退到 LIKE，原因写在 `crud/news_search.py` 顶部注释里。
 
 ## 测试
 
@@ -135,7 +161,6 @@ python -m pytest -q
 
 ## 已知限制
 
-- **没有后台管理**：新增/编辑新闻目前只能手工 SQL，这是下一步最该补的功能。
 - **表结构无版本管理**：以 `database.sql` 为准，没有 Alembic；改表后跑 `python scripts/check_schema.py` 检查 ORM 与库是否漂移。
 - **回写任务是单进程假设**：`main.py` 里的后台任务在多 worker 部署时会重复扫同一批增量，需要加分布式锁。
 - **限流按 IP**：直接读 `request.client.host`，放在反向代理后面会变成所有用户共享一个桶，需要解析 `X-Forwarded-For`。

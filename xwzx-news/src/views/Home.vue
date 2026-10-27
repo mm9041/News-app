@@ -1,6 +1,10 @@
 <template>
   <div class="home">
-    <van-nav-bar :title="$t('home.title')" fixed />
+    <van-nav-bar :title="$t('home.title')" fixed>
+      <template #right>
+        <van-icon name="search" size="18" @click="goSearch" />
+      </template>
+    </van-nav-bar>
     
     <!-- 更多选项独立div -->
     <div class="more-options">
@@ -118,6 +122,11 @@ const getCategoryTranslation = (categoryName) => {
 // 跳转到分类页面
 const goToCategory = () => {
   router.push('/category')
+}
+
+// 跳转到搜索页
+const goSearch = () => {
+  router.push('/search')
 }
 
 // 获取分类导航栏的位置并设置滚动监听

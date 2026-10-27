@@ -22,8 +22,11 @@ class UserInfoBase(BaseModel):
 class UserInfoResponse(UserInfoBase):
     id: int
     username: str
+    # 前端用它决定是否显示「管理后台」入口；真正的拦截在后端 get_current_admin
+    is_admin: bool = Field(False, alias="isAdmin")
     model_config = ConfigDict(
-        from_attributes=True  # 允许从 ORM 对象属性中取值
+        from_attributes=True,  # 允许从 ORM 对象属性中取值
+        populate_by_name=True,
     )
 
 

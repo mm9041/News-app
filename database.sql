@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `gender` ENUM('male', 'female', 'unknown') NULL DEFAULT 'unknown' COMMENT '性别',
   `bio` VARCHAR(500) NULL DEFAULT NULL COMMENT '个人简介',
   `phone` VARCHAR(20) NULL DEFAULT NULL COMMENT '手机号',
+  `is_admin` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否管理员',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -66,6 +67,9 @@ CREATE TABLE IF NOT EXISTS `news` (
   INDEX `fk_news_category_idx` (`category_id` ASC),
   INDEX `idx_publish_time` (`publish_time` DESC),
   INDEX `idx_category_publish` (`category_id` ASC, `publish_time` DESC, `id` DESC),
+  -- 中文全文检索：ngram 分词器（MySQL 8 内置），ngram_token_size 默认 2，
+  -- 所以单字关键词搜不到，应用层对 <2 字的关键词回退到 LIKE
+  FULLTEXT INDEX `ft_news_search` (`title`, `description`, `content`) WITH PARSER ngram,
   CONSTRAINT `fk_news_category`
     FOREIGN KEY (`category_id`)
     REFERENCES `news_category` (`id`)
