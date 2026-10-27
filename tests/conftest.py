@@ -55,17 +55,37 @@ def db():
 def temp_user(client):
     """注册一个临时用户，用完删掉（token 随外键 CASCADE 一起删）。
 
-    同时清掉注册接口的限流计数 —— 反复跑测试很容易在同一分钟内超过 5 次。
+    用户名用 `pytest_a_` 前缀，setup 只清理自己前缀的历史残留 ——
+    如果清理 `pytest_%`，会把同时段创建的 other_user 一起删掉，
+    导致另一个 fixture 的 token 突然失效。
     """
-    username = f"pytest_{uuid.uuid4().hex[:8]}"
+    username = f"pytest_a_{uuid.uuid4().hex[:8]}"
     password = "Pytest123456"
 
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM `user` WHERE username LIKE 'pytest_%'")
+            cur.execute("DELETE FROM `user` WHERE username LIKE 'pytest_a_%'")
 
     _clear_rate_limit("register")
 
+    resp = client.post("/api/user/register", json={"username": username, "password": password})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+
+    yield {"username": username, "password": password, "token": data["token"], "user_id": data["userInfo"]["id"]}
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM `user` WHERE username=%s", (username,))
+
+
+@pytest.fixture
+def other_user(client):
+    """第二个普通用户，用于验证「不能删别人的评论」。"""
+    username = f"pytest_b_{uuid.uuid4().hex[:8]}"
+    password = "Pytest123456"
+
+    _clear_rate_limit("register")
     resp = client.post("/api/user/register", json={"username": username, "password": password})
     assert resp.status_code == 200, resp.text
     data = resp.json()["data"]

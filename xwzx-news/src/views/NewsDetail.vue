@@ -51,6 +51,61 @@
           </div>
         </div>
       </div>
+
+      <!-- 评论区 -->
+      <div class="comment-section">
+        <div class="comment-header">
+          评论
+          <span class="comment-count" v-if="commentTotal">{{ commentTotal }}</span>
+        </div>
+
+        <div class="comment-editor">
+          <van-field
+            v-model="commentText"
+            rows="2"
+            autosize
+            type="textarea"
+            maxlength="500"
+            show-word-limit
+            placeholder="说点什么..."
+            class="comment-field"
+          />
+          <van-button
+            size="small"
+            type="primary"
+            :loading="submitting"
+            :disabled="!commentText.trim()"
+            @click="submitComment"
+          >
+            发布
+          </van-button>
+        </div>
+
+        <div v-if="comments.length" class="comment-list">
+          <div v-for="item in comments" :key="item.id" class="comment-item">
+            <van-image
+              round
+              width="32"
+              height="32"
+              class="comment-avatar"
+              :src="item.user.avatar || defaultAvatar"
+            />
+            <div class="comment-body">
+              <div class="comment-meta">
+                <span class="comment-name">{{ item.user.nickname || item.user.username }}</span>
+                <span class="comment-time">{{ formatTime(item.createdAt) }}</span>
+                <span v-if="item.canDelete" class="comment-delete" @click="deleteComment(item)">删除</span>
+              </div>
+              <div class="comment-text">{{ item.content }}</div>
+            </div>
+          </div>
+
+          <div v-if="commentHasMore" class="comment-more" @click="loadComments()">加载更多评论</div>
+          <div v-else class="comment-more comment-end">没有更多了</div>
+        </div>
+
+        <van-empty v-else-if="commentLoaded" description="还没有评论，来说第一句吧" image-size="60" />
+      </div>
     </div>
     
     <van-empty v-else description="加载中..." />
@@ -64,8 +119,9 @@ import { useNewsStore } from '../store/modules/news'
 import { useHistoryStore } from '../store/modules/history'
 import { useFavoriteStore } from '../store/modules/favorite'
 import { useUserStore } from '../store/user'
-import { showToast } from 'vant'
+import { showConfirmDialog, showToast } from 'vant'
 import { onImageError } from '../config/image'
+import http from '../api/http'
 
 const route = useRoute()
 const router = useRouter()
@@ -162,6 +218,101 @@ const loadDetail = async () => {
         favoriteStore.removeFavorite(newsStore.newsDetail.id)
       }
     }
+  }
+
+  // 正文加载完再拉评论；评论失败不该阻塞正文阅读
+  await loadComments(true)
+}
+
+// ---------------------------- 评论 ----------------------------
+
+const COMMENT_PAGE_SIZE = 10
+const defaultAvatar = 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg'
+
+const comments = ref([])
+const commentTotal = ref(0)
+const commentPage = ref(1)
+const commentHasMore = ref(false)
+const commentLoaded = ref(false)
+const commentLoading = ref(false)
+const commentText = ref('')
+const submitting = ref(false)
+
+const formatTime = value => (value ? String(value).replace('T', ' ').slice(0, 16) : '')
+
+// 这里刻意用「加载更多」按钮而不是 van-list：
+// van-list 在触发 @load 前会自己把 loading 置 true，稍不注意就会挡掉自己的请求。
+const loadComments = async (reset = false) => {
+  if (reset) {
+    commentPage.value = 1
+    comments.value = []
+    commentHasMore.value = false
+    commentLoaded.value = false
+  }
+  if (commentLoading.value) return
+
+  commentLoading.value = true
+  try {
+    const res = await http.get('/api/comment/list', {
+      params: {
+        newsId: newsId.value,
+        page: commentPage.value,
+        pageSize: COMMENT_PAGE_SIZE
+      }
+    })
+    const data = res.data?.data || {}
+    const items = data.list || []
+
+    comments.value = [...comments.value, ...items]
+    commentTotal.value = data.total || 0
+    commentHasMore.value = Boolean(data.hasMore)
+    commentPage.value += 1
+  } catch (error) {
+    // 评论加载失败不影响正文阅读，静默处理
+  } finally {
+    commentLoading.value = false
+    commentLoaded.value = true
+  }
+}
+
+const submitComment = async () => {
+  const content = commentText.value.trim()
+  if (!content) return
+
+  if (!userStore.getLoginStatus) {
+    showToast('请先登录后再评论')
+    router.push('/login')
+    return
+  }
+
+  submitting.value = true
+  try {
+    await http.post('/api/comment/add', { newsId: newsId.value, content })
+    commentText.value = ''
+    showToast('评论成功')
+    await loadComments(true)
+  } catch (error) {
+    // 拦截器已提示
+  } finally {
+    submitting.value = false
+  }
+}
+
+const deleteComment = async item => {
+  try {
+    await showConfirmDialog({ title: '删除评论', message: '确定删除这条评论？' })
+  } catch (error) {
+    return
+  }
+
+  try {
+    await http.delete(`/api/comment/${item.id}`)
+    // 本地移除即可，不必整页重刷
+    comments.value = comments.value.filter(comment => comment.id !== item.id)
+    commentTotal.value = Math.max(0, commentTotal.value - 1)
+    showToast('已删除')
+  } catch (error) {
+    // 拦截器已提示
   }
 }
 
@@ -290,5 +441,95 @@ watch(newsId, (newId, oldId) => {
   font-size: 14px;
   line-height: 1.4;
   flex: 1;
+}
+/* ---------------------------- 评论 ---------------------------- */
+.comment-section {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 8px solid #f7f8fa;
+}
+
+.comment-header {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.comment-count {
+  color: #969799;
+  font-weight: normal;
+  font-size: 13px;
+}
+
+.comment-editor {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.comment-field {
+  flex: 1;
+  padding: 8px;
+  background-color: #f7f8fa;
+  border-radius: 8px;
+}
+
+.comment-item {
+  display: flex;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f2f3f5;
+}
+
+.comment-avatar {
+  flex-shrink: 0;
+}
+
+.comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.comment-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #323233;
+}
+
+.comment-time {
+  font-size: 11px;
+  color: #c8c9cc;
+}
+
+.comment-delete {
+  margin-left: auto;
+  font-size: 12px;
+  color: #ee0a24;
+}
+
+.comment-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #323233;
+  word-break: break-word;
+}
+
+.comment-more {
+  padding: 14px 0;
+  text-align: center;
+  font-size: 13px;
+  color: #1989fa;
+}
+
+.comment-end {
+  color: #c8c9cc;
 }
 </style>

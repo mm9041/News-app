@@ -142,6 +142,30 @@ CREATE TABLE IF NOT EXISTS `ai_chat` (
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI聊天记录表';
 
+-- ----------------------------
+-- 新闻评论表
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `news_comment` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '评论ID',
+  `news_id` INT UNSIGNED NOT NULL COMMENT '新闻ID',
+  `user_id` INT UNSIGNED NOT NULL COMMENT '用户ID',
+  `content` VARCHAR(500) NOT NULL COMMENT '评论内容',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_news_created` (`news_id` ASC, `created_at` DESC, `id` DESC),
+  INDEX `fk_news_comment_user_idx` (`user_id` ASC),
+  CONSTRAINT `fk_news_comment_news`
+    FOREIGN KEY (`news_id`)
+    REFERENCES `news` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_news_comment_user`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `user` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='新闻评论表';
+
 -- 初始化数据
 -- 插入默认新闻分类
 INSERT INTO `news_category` (`name`, `sort_order`) VALUES 

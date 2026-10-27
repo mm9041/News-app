@@ -107,6 +107,9 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | GET | `/api/news/list?categoryId&page&pageSize` | 否 | 列表，按发布时间倒序 |
 | GET | `/api/news/search?keyword&page&pageSize` | 否 | 全文搜索（标题/摘要/正文） |
 | GET | `/api/news/detail?id` | 否 | 详情 + 相关推荐，并把阅读量 +1 |
+| GET | `/api/comment/list?newsId&page&pageSize` | 否 | 评论列表；登录后每项多返回 `canDelete` |
+| POST | `/api/comment/add` | 是 | 发表评论（≤500 字） |
+| DELETE | `/api/comment/{id}` | 是 | 删除评论（本人或管理员） |
 | POST | `/api/user/register` | 否 | 注册（限 5 次/分/IP） |
 | POST | `/api/user/login` | 否 | 登录（限 10 次/分/IP） |
 | GET | `/api/user/info` | 是 | 当前用户 |
@@ -149,6 +152,8 @@ python scripts/make_admin.py <用户名>
 - **搜索**：`news` 表上建了 ngram 全文索引，查询用 `BOOLEAN MODE` 的短语匹配。
   单字关键词（`ngram_token_size=2` 切不出来）和英文短词（实测 `NASA` 的 MATCH 得分是 0）
   会回退到 LIKE，原因写在 `crud/news_search.py` 顶部注释里。
+- **评论**：单层评论、不做楼中楼，删除即物理删除（新闻/用户被删时外键 CASCADE 一并清掉）。
+  列表公开可读，`canDelete` 由后端算好（本人或管理员），前端不做二次判断。
 
 ## 测试
 

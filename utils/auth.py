@@ -9,6 +9,20 @@ from crud import users
 from models.users import User
 
 
+def _extract_token(authorization: Optional[str]) -> Optional[str]:
+    """从 Authorization 头取出 token。
+
+    裸 token 与 "Bearer xxx" 都接受。用切片而不是 replace：
+    replace 会把 token 中间出现的 "Bearer " 也一并删掉，行为不可预期。
+    """
+    if not authorization:
+        return None
+    token = authorization.strip()
+    if token[:7].lower() == "bearer ":
+        token = token[7:].strip()
+    return token or None
+
+
 async def get_current_user(
         authorization: Optional[str] = Header(None, alias="Authorization"),
         db: AsyncSession = Depends(get_database)
@@ -22,20 +36,13 @@ async def get_current_user(
 
     既不符合项目统一的 {code, message, data}，前端也读不到 message。
     所以改成在函数里自己判断，统一抛 401。
-
-    token 放裸值即可；带了 "Bearer " 前缀也兼容（下面直接 replace 掉）。
     """
-    if not authorization:
+    token = _extract_token(authorization)
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="未提供令牌，请先登录"
         )
-
-    # 裸 token 与 "Bearer xxx" 都接受。用 removeprefix 而不是 replace：
-    # replace 会把 token 中间出现的 "Bearer " 也一并删除，行为不可预期。
-    token = authorization.strip()
-    if token[:7].lower() == "bearer ":
-        token = token[7:].strip()
 
     user = await users.get_user_by_token(db, token)
     if not user:
@@ -45,6 +52,20 @@ async def get_current_user(
         )
 
     return user
+
+
+async def get_optional_user(
+        authorization: Optional[str] = Header(None, alias="Authorization"),
+        db: AsyncSession = Depends(get_database)
+) -> Optional[User]:
+    """可选登录：没带头、或 token 失效时都返回 None，不抛 401。
+
+    评论列表这类「游客能看、登录后才决定能不能删」的接口用它。
+    """
+    token = _extract_token(authorization)
+    if not token:
+        return None
+    return await users.get_user_by_token(db, token)
 
 
 async def get_current_admin(user: User = Depends(get_current_user)) -> User:
