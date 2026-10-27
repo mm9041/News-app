@@ -16,6 +16,14 @@
             <van-icon :name="liked ? 'good-job' : 'good-job-o'" size="20" />
             <span class="like-count">{{ likes }}</span>
           </div>
+          <div
+            v-if="canFollowAuthor"
+            class="follow-author-btn"
+            :class="{ 'is-following': followingAuthor }"
+            @click="toggleFollowAuthor"
+          >
+            {{ followingAuthor ? '已关注' : '关注' }}
+          </div>
           <van-button
             class="favorite-btn"
             :icon="isFavorite ? 'star' : 'star-o'"
@@ -251,6 +259,21 @@ const loadDetail = async () => {
   likes.value = newsStore.newsDetail.likes || 0
   liked.value = Boolean(newsStore.newsDetail.isLiked)
 
+  // 关注状态：只在「这条新闻有发布者」时查询
+  const authorId = newsStore.newsDetail.authorId
+  if (authorId && userStore.getLoginStatus && authorId !== userStore.userInfo?.id) {
+    try {
+      const res = await http.get('/api/follow/status', {
+        params: { targetType: 'user', targetId: authorId }
+      })
+      followingAuthor.value = Boolean(res.data?.data?.following)
+    } catch (error) {
+      followingAuthor.value = false
+    }
+  } else {
+    followingAuthor.value = false
+  }
+
   // 添加到浏览历史
   if (newsStore.newsDetail.id) {
     if (userStore.getLoginStatus) {
@@ -309,6 +332,52 @@ const toggleLike = async () => {
     // 拦截器已提示
   } finally {
     likeLoading.value = false
+  }
+}
+
+// ---------------------------- 关注作者 ----------------------------
+
+const followingAuthor = ref(false)
+const followLoading = ref(false)
+
+const canFollowAuthor = computed(() => {
+  const authorId = newsStore.newsDetail.authorId
+  if (!authorId) return false
+  // 自己发的新闻不显示关注按钮；未登录也可以显示（点了引导登录）
+  return authorId !== userStore.userInfo?.id
+})
+
+const toggleFollowAuthor = async () => {
+  const authorId = newsStore.newsDetail.authorId
+  if (!authorId) return
+
+  if (!userStore.getLoginStatus) {
+    showToast('请先登录')
+    router.push('/login')
+    return
+  }
+  if (followLoading.value) return
+
+  followLoading.value = true
+  try {
+    if (followingAuthor.value) {
+      await http.delete('/api/follow', {
+        data: { targetType: 'user', targetId: authorId }
+      })
+      followingAuthor.value = false
+      showToast('已取消关注')
+    } else {
+      await http.post('/api/follow', {
+        targetType: 'user',
+        targetId: authorId
+      })
+      followingAuthor.value = true
+      showToast('已关注作者')
+    }
+  } catch (error) {
+    // 拦截器已提示
+  } finally {
+    followLoading.value = false
   }
 }
 
@@ -579,6 +648,22 @@ watch(newsId, (newId, oldId) => {
   margin-top: 2px;
   font-size: 11px;
   line-height: 1;
+}
+
+.follow-author-btn {
+  padding: 0 10px;
+  height: 32px;
+  line-height: 30px;
+  border: 1px solid #1989fa;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #1989fa;
+  background-color: #fff;
+}
+
+.follow-author-btn.is-following {
+  border-color: #c8c9cc;
+  color: #969799;
 }
 
 /* ---------------------------- 评论 ---------------------------- */

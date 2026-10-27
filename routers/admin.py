@@ -9,11 +9,21 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import update
+
 from config.db_conf import get_database
 from crud import admin_news, stats
 from crud import tag as tag_crud
 from models.users import User
-from schemas.admin import AdminNewsItemResponse, AdminNewsListResponse, AdminNewsUpsertRequest
+from schemas.admin import (
+    AdminFlagRequest,
+    AdminNewsItemResponse,
+    AdminNewsListResponse,
+    AdminNewsUpsertRequest,
+    AdminUserItemResponse,
+    AdminUserListResponse,
+    BanRequest,
+)
 from utils.auth import get_current_admin
 from utils.response import success_response
 
@@ -103,3 +113,97 @@ async def get_stats(
         },
         message="获取统计数据成功",
     )
+
+
+# ---------------------------- 用户管理 ----------------------------
+
+
+@router.get("/users")
+async def list_users(
+        page: int = Query(1, ge=1),
+        page_size: int = Query(10, ge=1, le=50, alias="pageSize"),
+        keyword: Optional[str] = Query(None, max_length=50),
+        db: AsyncSession = Depends(get_database),
+):
+    from crud import users as users_crud
+
+    skip = (page - 1) * page_size
+    rows, total = await users_crud.list_users_for_admin(db, keyword, skip, page_size)
+
+    items = [
+        AdminUserItemResponse(
+            id=user.id,
+            username=user.username,
+            nickname=user.nickname,
+            avatar=user.avatar,
+            gender=user.gender,
+            bio=user.bio,
+            phone=user.phone,
+            is_admin=user.is_admin,
+            banned=bool(user.status),
+            comment_count=count,
+            created_at=user.created_at,
+        )
+        for user, count in rows
+    ]
+    data = AdminUserListResponse(list=items, total=total)
+    return success_response(data=data, message="获取用户列表成功")
+
+
+@router.put("/users/{user_id}/ban")
+async def ban_user(
+        user_id: int,
+        data: BanRequest,
+        admin: User = Depends(get_current_admin),
+        db: AsyncSession = Depends(get_database),
+):
+    if user_id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能禁用自己")
+
+    result = await db.execute(
+        update(User).where(User.id == user_id).values(status=1 if data.banned else 0)
+    )
+    await db.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+
+    return success_response(message="已禁用" if data.banned else "已解禁")
+
+
+@router.put("/users/{user_id}/admin")
+async def set_user_admin(
+        user_id: int,
+        data: AdminFlagRequest,
+        admin: User = Depends(get_current_admin),
+        db: AsyncSession = Depends(get_database),
+):
+    if user_id == admin.id and not data.is_admin:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能取消自己的管理员权限")
+
+    result = await db.execute(
+        update(User).where(User.id == user_id).values(is_admin=data.is_admin)
+    )
+    await db.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+
+    return success_response(message="已设为管理员" if data.is_admin else "已取消管理员")
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+        user_id: int,
+        admin: User = Depends(get_current_admin),
+        db: AsyncSession = Depends(get_database),
+):
+    if user_id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能删除自己")
+
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+
+    # 级联清掉 token/评论/点赞/收藏/历史/通知；news.user_id 会置 NULL（新闻保留）
+    await db.delete(user)
+    await db.commit()
+    return success_response(message="删除成功")

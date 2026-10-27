@@ -33,6 +33,9 @@ async def login(user_data: UserRequest, request: Request, db: AsyncSession = Dep
     user = await users.authenticate_user(db, user_data.username, user_data.password)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
+    if user.status:
+        # 被管理员禁用的账号：不是密码错，别引导用户去改密码
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已被禁用，请联系管理员")
     token = await create_token(db, user.id)
     response_data = UserAuthResponse(token=token, userInfo=UserInfoResponse.model_validate(user))
     return success_response(data=response_data, message="登录成功")

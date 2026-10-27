@@ -1,0 +1,16 @@
+{
+  "name": "新闻资讯",
+  "short_name": "新闻资讯",
+  "description": "移动端优先的新闻阅读应用",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1989fa",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

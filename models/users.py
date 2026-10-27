@@ -32,6 +32,8 @@ class User(Base):
     phone: Mapped[Optional[str]] = mapped_column(String(20), comment="手机号")
     # 管理后台的准入标记。设为 True 的方式见 scripts/make_admin.py
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否管理员")
+    # 0=正常 1=禁用。禁用在 get_current_user 统一拦截，登录也一样
+    status: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否禁用")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now,comment="更新时间")
 

@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.db_conf import get_database
@@ -9,6 +10,7 @@ from crud import news_cache, news_search
 from crud import notification as notification_crud
 from crud import recommend as recommend_crud
 from crud import tag as tag_crud
+from models.like import NewsLike
 from models.users import User
 from schemas.base import NewsItemBase
 from utils.auth import get_current_user, get_optional_user
@@ -96,11 +98,20 @@ async def get_news_detail(
     # 读的时候会叠加未回写的增量，所以两者天然一致，缓存不该被一次浏览打穿。
     views = await news_cache.increase_news_views(db, news_detail.id, news_detail.views)
 
-    # 点赞是实时 COUNT（走 idx_news_like_news），不缓存、不冗余计数
-    likes = await like_crud.count_likes(db, news_id)
-    is_liked = False
+    # 点赞统计 + 是否已赞合并成一条 SQL（原来是两次往返，压测显示这是主要延迟之一）
     if current_user:
-        is_liked = await like_crud.is_liked(db, news_id, current_user.id)
+        from sqlalchemy import case
+
+        likes_stmt = select(
+            func.count(NewsLike.id),
+            func.coalesce(func.sum(case((NewsLike.user_id == current_user.id, 1), else_=0)), 0),
+        ).where(NewsLike.news_id == news_id)
+        like_count, liked_count = (await db.execute(likes_stmt)).one()
+        likes = like_count or 0
+        is_liked = bool(liked_count)
+    else:
+        likes = await like_crud.count_likes(db, news_id)
+        is_liked = False
 
     related_news = await news_cache.get_related_news(db, news_detail.id, news_detail.category_id)
     tag_rows = await tag_crud.list_news_tags(db, news_detail.id)
@@ -116,6 +127,7 @@ async def get_news_detail(
             "author": news_detail.author,
             "publishTime": news_detail.publish_time,
             "categoryId": news_detail.category_id,
+            "authorId": news_detail.user_id,
             "views": views,
             "likes": likes,
             "isLiked": is_liked,
@@ -176,3 +188,34 @@ async def unlike_news(
     await like_crud.unlike(db, news_id, user.id)
     likes = await like_crud.count_likes(db, news_id)
     return {"code": 200, "message": "已取消点赞", "data": {"liked": False, "likes": likes}}
+
+
+@router.get("/suggest")
+async def suggest(
+        keyword: str = Query(..., min_length=1, max_length=20),
+        limit: int = Query(8, ge=1, le=20),
+        db: AsyncSession = Depends(get_database),
+):
+    """输入联想：标题包含关键词的新闻 + 名称匹配的标签。"""
+    kw = keyword.strip()
+    if not kw:
+        return {"code": 200, "message": "success", "data": {"news": [], "tags": []}}
+
+    news_rows = await db.execute(
+        select(News.id, News.title)
+        .where(News.title.contains(kw, autoescape=True))
+        .order_by(News.views.desc(), News.id.desc())
+        .limit(limit)
+    )
+    tag_rows = await db.execute(
+        select(Tag.id, Tag.name).where(Tag.name.contains(kw, autoescape=True)).limit(5)
+    )
+
+    return {
+        "code": 200,
+        "message": "success",
+        "data": {
+            "news": [{"id": row[0], "title": row[1]} for row in news_rows.all()],
+            "tags": [{"id": row[0], "name": row[1]} for row in tag_rows.all()],
+        }
+    }

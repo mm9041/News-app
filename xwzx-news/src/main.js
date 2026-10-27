@@ -3,6 +3,7 @@ import App from './App.vue'
 import router from './router'
 import pinia from './store'
 import { bindTokenGetter, bindUnauthorizedHandler } from './api/http'
+import { useThemeStore } from './store/theme'
 import { setupGuard } from './router/guard'
 import { useUserStore } from './store/user'
 
@@ -82,9 +83,19 @@ bindUnauthorizedHandler(() => useUserStore().logout())
 // 管理员路由守卫（必须在 pinia 安装之后注册）
 setupGuard(router)
 
+// 主题：把 store 里保存的主题写进 CSS 变量。不调用的话刷新页面后
+// 变量全部丢失，只有再次进设置页才会恢复
+const themeStore = useThemeStore()
+themeStore.applyTheme()
+
+// PWA：生产构建才注册 Service Worker（开发环境会干扰 Vite 热更新）
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(error => {
+      console.error('Service Worker 注册失败:', error)
+    })
+  })
+}
+
 app.mount('#app')
 
-// 初始化主题
-import { useThemeStore } from './store/theme'
-const themeStore = useThemeStore()
-themeStore.initTheme()

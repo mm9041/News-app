@@ -41,6 +41,8 @@
         <van-cell :title="$t('my.notifications')" is-link :badge="unreadCount > 0 ? unreadCount : ''" @click="goToNotifications" />
         <van-cell v-if="userInfo?.isAdmin" title="新闻管理" is-link @click="goToAdminNews" />
         <van-cell v-if="userInfo?.isAdmin" title="数据看板" is-link @click="goToDashboard" />
+        <van-cell v-if="userInfo?.isAdmin" title="用户管理" is-link @click="goToAdminUsers" />
+        <van-cell title="我的关注" is-link @click="goToFollow" />
         <van-cell :title="$t('my.settings')" is-link @click="goToSettings" />
         <van-cell v-if="isLogin" :title="$t('my.logout')" @click="handleLogout" />
       </van-cell-group>
@@ -121,6 +123,20 @@ const goToAdminNews = () => {
 // 数据看板
 const goToDashboard = () => {
   router.push('/admin/dashboard');
+};
+
+// 用户管理
+const goToAdminUsers = () => {
+  router.push('/admin/users');
+};
+
+// 关注页
+const goToFollow = () => {
+  if (!isLogin.value) {
+    showToast(t('common.login'));
+    return;
+  }
+  router.push('/follow');
 };
 
 // 跳转到浏览历史页面

@@ -1,7 +1,7 @@
 <template>
   <div class="news-item" @click="goToDetail">
     <div class="news-content">
-      <h3 class="news-title">{{ news.title }}</h3>
+      <h3 class="news-title" v-html="highlightedTitle"></h3>
       <p class="news-desc">{{ news.description }}</p>
       <div class="news-info">
         <span>{{ news.author }}</span>
@@ -16,7 +16,8 @@
 </template>
 
 <script setup>
-import { defineProps } from 'vue'
+import { computed, defineProps } from 'vue'
+import DOMPurify from 'dompurify'
 import { useRouter } from 'vue-router'
 import { onImageError } from '../config/image'
 
@@ -24,7 +25,21 @@ const props = defineProps({
   news: {
     type: Object,
     required: true
+  },
+  keyword: {
+    type: String,
+    default: ''
   }
+})
+
+const highlightedTitle = computed(() => {
+  const title = props.news.title || ''
+  const kw = (props.keyword || '').trim()
+  if (!kw) return title
+
+  const escaped = title.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`)
+  const pattern = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return escaped.replace(new RegExp(pattern, 'gi'), match => `<mark>${match}</mark>`)
 })
 
 const router = useRouter()

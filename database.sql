@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `bio` VARCHAR(500) NULL DEFAULT NULL COMMENT '个人简介',
   `phone` VARCHAR(20) NULL DEFAULT NULL COMMENT '手机号',
   `is_admin` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否管理员',
+  `status` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0正常 1禁用',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -741,3 +742,22 @@ CREATE TABLE IF NOT EXISTS `news_tag` (
     ON DELETE CASCADE
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='新闻标签关联表';
+
+-- ----------------------------
+-- 关注表
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `follow` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '关注ID',
+  `user_id` INT UNSIGNED NOT NULL COMMENT '关注者ID',
+  `target_type` VARCHAR(10) NOT NULL COMMENT '类型：user / category',
+  `target_id` INT UNSIGNED NOT NULL COMMENT '目标ID',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '关注时间',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `user_target_unique` (`user_id` ASC, `target_type` ASC, `target_id` ASC),
+  INDEX `idx_target` (`target_type` ASC, `target_id` ASC),
+  CONSTRAINT `fk_follow_user`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `user` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='关注表';

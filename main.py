@@ -5,14 +5,18 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from cache import view_counter
+from config.db_conf import AsyncSessionLocal, async_engine
 from crud.news_views import flush_view_deltas
-from routers import news, users, favorite, history, ai, admin, comment, upload, notification, tag
+from routers import follow, news, users, favorite, history, ai, admin, comment, upload, notification, tag
 from utils.exception_handlers import register_exception_handlers
 from utils.logger import get_logger, setup_logging
+from utils.metrics import MetricsMiddleware, render_metrics
 from utils.middleware import RequestIdMiddleware
+from utils.observability import probe_dependencies, setup_slow_query_logging
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -85,6 +89,7 @@ register_exception_handlers(app)
 
 # 注意顺序：add_middleware 是「后加的在外层」。CORS 必须最外层，
 # 否则中间件内层抛出的异常响应不会带 CORS 头，前端只会看到 net::ERR_FAILED。
+app.add_middleware(MetricsMiddleware)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -109,6 +114,60 @@ app.include_router(admin.router)
 app.include_router(comment.router)
 app.include_router(upload.router)
 app.include_router(notification.router)
+app.include_router(tag.router)
+app.include_router(follow.router)
+
+
+# ---------------------------- 可观测性 ----------------------------
+
+@app.get("/health")
+async def health():
+    """依赖探测：任一依赖挂了返回 503，供负载均衡 / 监控探针使用。"""
+    async with AsyncSessionLocal() as db:
+        checks = await probe_dependencies(db)
+    ok = all(check["ok"] for check in checks.values())
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={"status": "up" if ok else "degraded", "checks": checks},
+    )
+
+
+@app.get("/metrics")
+async def metrics_endpoint():
+    """Prometheus 抓取端点（文本格式）。"""
+    return Response(content=render_metrics(), media_type="text/plain; version=0.0.4; charset=utf-8")
+
+
+setup_slow_query_logging()
+app.include_router(follow.router)
+
+# 上传的图片直接由 FastAPI 托管；生产环境应该换成 nginx / 对象存储
+UPLOAD_ROOT = BASE_DIR / "uploads"
+UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")
+
+
+# ---------------------------- 可观测性 ----------------------------
+
+@app.get("/health")
+async def health():
+    """依赖探测：任一依赖挂了返回 503，供负载均衡 / 监控探针使用。"""
+    async with AsyncSessionLocal() as db:
+        checks = await probe_dependencies(db)
+    ok = all(check["ok"] for check in checks.values())
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={"status": "up" if ok else "degraded", "checks": checks},
+    )
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus 抓取端点（文本格式）。"""
+    return Response(content=render_metrics(), media_type="text/plain; version=0.0.4; charset=utf-8")
+
+
+setup_slow_query_logging()
 app.include_router(tag.router)
 
 # 上传的图片直接由 FastAPI 托管；生产环境应该换成 nginx / 对象存储

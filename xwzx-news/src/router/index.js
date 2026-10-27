@@ -78,6 +78,16 @@ const routes = [
     }
   },
   {
+    path: '/follow',
+    name: 'FollowFeed',
+    component: () => import('../views/FollowFeed.vue'),
+    meta: {
+      title: '关注',
+      keepAlive: false,
+      requiresAuth: true
+    }
+  },
+  {
     path: '/search',
     name: 'Search',
     component: () => import('../views/Search.vue'),
@@ -103,6 +113,16 @@ const routes = [
     component: () => import('../views/AdminDashboard.vue'),
     meta: {
       title: '数据看板',
+      keepAlive: false,
+      requiresAdmin: true
+    }
+  },
+  {
+    path: '/admin/users',
+    name: 'AdminUsers',
+    component: () => import('../views/AdminUsers.vue'),
+    meta: {
+      title: '用户管理',
       keepAlive: false,
       requiresAdmin: true
     }

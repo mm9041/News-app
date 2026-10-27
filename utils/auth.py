@@ -50,6 +50,12 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的令牌或已经过期的令牌"
         )
+    if user.status:
+        # 管理员禁用的账号：身份对、但被拉黑，返回 403 而不是 401（不该引导去登录）
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账号已被禁用，请联系管理员"
+        )
 
     return user
 
@@ -65,7 +71,9 @@ async def get_optional_user(
     token = _extract_token(authorization)
     if not token:
         return None
-    return await users.get_user_by_token(db, token)
+    user = await users.get_user_by_token(db, token)
+    # 禁用账号视为游客：能看公开内容，但拿不到任何需要登录的能力
+    return None if (not user or user.status) else user
 
 
 async def get_current_admin(user: User = Depends(get_current_user)) -> User:

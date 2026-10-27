@@ -10,11 +10,53 @@
         show-action
         @search="onSearch"
         @clear="onClear"
+        @focus="onFocus"
+        @input="onInput"
       >
         <template #action>
           <div class="search-action" @click="onSearch">搜索</div>
         </template>
       </van-search>
+
+      <div v-if="showSuggest" class="suggest-panel">
+        <div v-if="suggestions.news.length">
+          <div
+            v-for="item in suggestions.news"
+            :key="item.id"
+            class="suggest-item"
+            @click="goToNews(item.id)"
+          >
+            <van-icon name="search" class="suggest-icon" />
+            <span class="suggest-text">{{ item.title }}</span>
+          </div>
+        </div>
+        <div v-if="suggestions.tags.length">
+          <div
+            v-for="tag in suggestions.tags"
+            :key="tag.id"
+            class="suggest-item"
+            @click="goToTag(tag.id)"
+          >
+            <van-icon name="bookmark-o" class="suggest-icon" />
+            <span class="suggest-text">#{{ tag.name }}</span>
+          </div>
+        </div>
+        <div v-if="history.length">
+          <div class="suggest-section">
+            最近搜索
+            <span class="suggest-clear" @click="clearHistory">清空</span>
+          </div>
+          <div
+            v-for="word in history"
+            :key="word"
+            class="suggest-item"
+            @click="useHistory(word)"
+          >
+            <van-icon name="clock-o" class="suggest-icon" />
+            <span class="suggest-text">{{ word }}</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="result-area">
@@ -30,7 +72,12 @@
         finished-text="没有更多了"
         @load="loadMore"
       >
-        <news-item v-for="item in list" :key="item.id" :news="item" />
+        <news-item
+          v-for="item in list"
+          :key="item.id"
+          :news="item"
+          :keyword="highlightKeyword"
+        />
       </van-list>
 
       <van-empty v-if="searched && !loading && !list.length" description="没有找到相关新闻" />
@@ -42,7 +89,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 
@@ -54,6 +101,8 @@ const route = useRoute()
 const router = useRouter()
 
 const PAGE_SIZE = 10
+const HISTORY_KEY = 'search_history'
+const HISTORY_LIMIT = 10
 
 const keyword = ref(route.query.keyword || '')
 const list = ref([])
@@ -62,14 +111,56 @@ const page = ref(1)
 const loading = ref(false)
 const finished = ref(false)
 const searched = ref(false)
+const history = ref(JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'))
+const suggestions = ref({ news: [], tags: [] })
+const showSuggest = ref(false)
 
-// ⚠️ `loading` 会被 van-list 在触发 @load 之前抢先置为 true，
-// 拿它当并发守卫会导致第一次触底就 return 且不再复位 —— 一直显示「加载中」。
-// 用独立标志 + 请求序号（丢弃重置时仍在飞行的旧响应）。
-let fetching = false
-let requestSeq = 0
+const highlightKeyword = computed(() => (searched.value ? keyword.value.trim() : ''))
 
 const goBack = () => router.back()
+
+let debounceTimer = null
+const onInput = () => {
+  clearTimeout(debounceTimer)
+  const kw = keyword.value.trim()
+  if (!kw) {
+    suggestions.value = { news: [], tags: [] }
+    showSuggest.value = history.value.length > 0
+    return
+  }
+  debounceTimer = setTimeout(async () => {
+    try {
+      const res = await http.get('/api/news/suggest', { params: { keyword: kw } })
+      suggestions.value = res.data?.data || { news: [], tags: [] }
+      showSuggest.value = true
+    } catch (error) {
+      // 联想失败不影响主流程
+    }
+  }, 300)
+}
+
+const onFocus = () => {
+  if (showSuggest.value) return
+  showSuggest.value = suggestions.value.news.length > 0 || history.value.length > 0
+}
+
+const saveHistory = word => {
+  const next = [word, ...history.value.filter(item => item !== word)].slice(0, HISTORY_LIMIT)
+  history.value = next
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
+}
+
+const clearHistory = () => {
+  history.value = []
+  localStorage.removeItem(HISTORY_KEY)
+  showSuggest.value = false
+}
+
+const useHistory = word => {
+  keyword.value = word
+  showSuggest.value = false
+  fetchPage(true)
+}
 
 const fetchPage = async (reset = false) => {
   const kw = keyword.value.trim()
@@ -83,41 +174,28 @@ const fetchPage = async (reset = false) => {
     list.value = []
     finished.value = false
     searched.value = true
-    fetching = false
-    requestSeq += 1
+    showSuggest.value = false
+    saveHistory(kw)
   }
 
-  if (fetching || finished.value) {
-    loading.value = false
-    return
-  }
+  if (loading.value || finished.value) return
 
-  fetching = true
   loading.value = true
-  const seq = ++requestSeq
-
   try {
     const res = await http.get('/api/news/search', {
       params: { keyword: kw, page: page.value, pageSize: PAGE_SIZE }
     })
-    if (seq !== requestSeq) return
-
     const data = res.data?.data || {}
     const items = data.list || []
-    const totalCount = data.total || 0
 
     list.value = [...list.value, ...items]
-    total.value = totalCount
-    finished.value = list.value.length >= totalCount || items.length < PAGE_SIZE
+    total.value = data.total || 0
+    finished.value = items.length < PAGE_SIZE
     page.value += 1
   } catch (error) {
-    // 具体错误提示由 http 拦截器统一处理，这里只需要停止继续加载
-    if (seq === requestSeq) finished.value = true
+    finished.value = true
   } finally {
-    if (seq === requestSeq) {
-      fetching = false
-      loading.value = false
-    }
+    loading.value = false
   }
 }
 
@@ -132,8 +210,20 @@ const onClear = () => {
 
 const loadMore = () => fetchPage()
 
+const goToNews = id => router.push(`/news/detail/${id}`)
+const goToTag = id => router.push(`/tag/${id}`)
+
+// 点击页面其他区域收起联想面板
+watch(showSuggest, visible => {
+  if (!visible) return
+  const close = () => {
+    showSuggest.value = false
+    document.removeEventListener('click', close)
+  }
+  setTimeout(() => document.addEventListener('click', close), 0)
+})
+
 onMounted(() => {
-  // 支持 /search?keyword=xxx 直接进结果页
   if (keyword.value.trim()) {
     fetchPage(true)
   }
@@ -165,6 +255,43 @@ onMounted(() => {
   padding-left: 8px;
 }
 
+.suggest-panel {
+  border-top: 1px solid #f2f3f5;
+  background-color: #fff;
+  padding-bottom: 8px;
+}
+
+.suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #323233;
+}
+
+.suggest-icon {
+  color: #c8c9cc;
+}
+
+.suggest-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggest-section {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 16px 4px;
+  font-size: 12px;
+  color: #969799;
+}
+
+.suggest-clear {
+  color: #c8c9cc;
+}
+
 .result-area {
   margin-top: 54px;
 }
@@ -173,5 +300,11 @@ onMounted(() => {
   padding: 8px 16px;
   font-size: 12px;
   color: #969799;
+}
+
+:deep(mark) {
+  background-color: #fff3cd;
+  color: inherit;
+  padding: 0 1px;
 }
 </style>

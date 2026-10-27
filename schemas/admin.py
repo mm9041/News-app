@@ -46,3 +46,38 @@ class AdminNewsListResponse(BaseModel):
     has_more: bool = Field(alias="hasMore")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class AdminUserItemResponse(BaseModel):
+    id: int
+    username: str
+    nickname: Optional[str] = None
+    avatar: Optional[str] = None
+    gender: Optional[str] = None
+    bio: Optional[str] = None
+    phone: Optional[str] = None
+    is_admin: bool = Field(alias="isAdmin")
+    banned: bool
+    comment_count: int = Field(alias="commentCount")
+    created_at: datetime = Field(alias="createdAt")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AdminUserListResponse(BaseModel):
+    list: list[AdminUserItemResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class BanRequest(BaseModel):
+    banned: bool
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AdminFlagRequest(BaseModel):
+    is_admin: bool = Field(..., alias="isAdmin")
+
+    model_config = ConfigDict(populate_by_name=True)

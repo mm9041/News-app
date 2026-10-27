@@ -3,9 +3,10 @@ import secrets
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.comment import NewsComment
 from models.users import User, UserToken
 from schemas.users import UserRequest, UserUpdateRequest
 from utils import security
@@ -97,6 +98,33 @@ async def update_user(db: AsyncSession, username: str, user_data: UserUpdateRequ
     return updated_user
 
 
+async def list_users_for_admin(db: AsyncSession, keyword: str | None, skip: int, limit: int):
+    """管理员看用户列表，每行带评论数。"""
+    conditions = []
+    if keyword and keyword.strip():
+        kw = keyword.strip()
+        conditions.append(
+            User.username.contains(kw, autoescape=True)
+            | User.nickname.contains(kw, autoescape=True)
+        )
+
+    total = (
+        await db.execute(select(func.count(User.id)).where(*conditions))
+    ).scalar_one()
+
+    stmt = (
+        select(User, func.count(NewsComment.id))
+        .outerjoin(NewsComment, NewsComment.user_id == User.id)
+        .where(*conditions)
+        .group_by(User.id)
+        .order_by(User.created_at.desc(), User.id.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    rows = (await db.execute(stmt)).all()
+    return [(row[0], row[1]) for row in rows], total
+
+
 # 修改密码: 验证旧密码 → 新密码加密 → 修改密码
 async def change_password(db: AsyncSession, user: User, old_password: str, new_password: str):
     if not security.verify_password(old_password, user.password):
@@ -110,3 +138,30 @@ async def change_password(db: AsyncSession, user: User, old_password: str, new_p
     await db.commit()
     await db.refresh(user)
     return True
+
+
+async def list_users_for_admin(db: AsyncSession, keyword: str | None, skip: int, limit: int):
+    """管理员看用户列表，每行带评论数。"""
+    conditions = []
+    if keyword and keyword.strip():
+        kw = keyword.strip()
+        conditions.append(
+            User.username.contains(kw, autoescape=True)
+            | User.nickname.contains(kw, autoescape=True)
+        )
+
+    total = (
+        await db.execute(select(func.count(User.id)).where(*conditions))
+    ).scalar_one()
+
+    stmt = (
+        select(User, func.count(NewsComment.id))
+        .outerjoin(NewsComment, NewsComment.user_id == User.id)
+        .where(*conditions)
+        .group_by(User.id)
+        .order_by(User.created_at.desc(), User.id.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    rows = (await db.execute(stmt)).all()
+    return [(row[0], row[1]) for row in rows], total
