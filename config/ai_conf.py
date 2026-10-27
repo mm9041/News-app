@@ -9,7 +9,7 @@ load_dotenv(BASE_DIR / ".env", override=False)
 # OpenAI 兼容的 chat/completions 地址
 AI_CHAT_URL = os.getenv("AI_CHAT_URL", "")
 AI_API_KEY = os.getenv("AI_API_KEY", "")
-AI_MODEL = os.getenv("AI_MODEL", "qwen3.7-plus")
+AI_MODEL = os.getenv("AI_MODEL", "qwen3.7-flash")
 AI_TIMEOUT = float(os.getenv("AI_TIMEOUT", "120"))
 # 允许客户端通过请求体切换的模型，逗号分隔；留空表示只能用 AI_MODEL
 AI_ALLOWED_MODELS = [m.strip() for m in os.getenv("AI_ALLOWED_MODELS", "").split(",") if m.strip()]

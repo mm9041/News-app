@@ -63,6 +63,12 @@ const loading = ref(false)
 const finished = ref(false)
 const searched = ref(false)
 
+// ⚠️ `loading` 会被 van-list 在触发 @load 之前抢先置为 true，
+// 拿它当并发守卫会导致第一次触底就 return 且不再复位 —— 一直显示「加载中」。
+// 用独立标志 + 请求序号（丢弃重置时仍在飞行的旧响应）。
+let fetching = false
+let requestSeq = 0
+
 const goBack = () => router.back()
 
 const fetchPage = async (reset = false) => {
@@ -77,28 +83,41 @@ const fetchPage = async (reset = false) => {
     list.value = []
     finished.value = false
     searched.value = true
+    fetching = false
+    requestSeq += 1
   }
 
-  // van-list 触底和手动点搜索可能同时进来，这里挡一下重复请求
-  if (loading.value || finished.value) return
+  if (fetching || finished.value) {
+    loading.value = false
+    return
+  }
 
+  fetching = true
   loading.value = true
+  const seq = ++requestSeq
+
   try {
     const res = await http.get('/api/news/search', {
       params: { keyword: kw, page: page.value, pageSize: PAGE_SIZE }
     })
+    if (seq !== requestSeq) return
+
     const data = res.data?.data || {}
     const items = data.list || []
+    const totalCount = data.total || 0
 
     list.value = [...list.value, ...items]
-    total.value = data.total || 0
-    finished.value = items.length < PAGE_SIZE
+    total.value = totalCount
+    finished.value = list.value.length >= totalCount || items.length < PAGE_SIZE
     page.value += 1
   } catch (error) {
     // 具体错误提示由 http 拦截器统一处理，这里只需要停止继续加载
-    finished.value = true
+    if (seq === requestSeq) finished.value = true
   } finally {
-    loading.value = false
+    if (seq === requestSeq) {
+      fetching = false
+      loading.value = false
+    }
   }
 }
 

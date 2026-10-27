@@ -124,6 +124,14 @@ const page = ref(1)
 const loading = ref(false)
 const finished = ref(false)
 
+// ⚠️ 不能用 `loading` 当并发守卫：van-list 在调用 @load **之前**就会把它置为 true，
+// 于是第一行判断直接命中并 return，既没发请求、也没人把 loading 复位 ——
+// 界面就永远停在「加载中」，这是之前只显示 10 条的根因。
+// 这里用独立的 fetching 标志，loading 只负责给 van-list 展示转圈；
+// requestSeq 用来丢弃「重置列表时仍在飞行」的旧响应，避免旧关键词的结果混进来。
+let fetching = false
+let requestSeq = 0
+
 const showForm = ref(false)
 const showCategoryPicker = ref(false)
 const editingId = ref(null)
@@ -156,10 +164,20 @@ const fetchPage = async (reset = false) => {
     page.value = 1
     list.value = []
     finished.value = false
+    fetching = false
+    requestSeq += 1 // 让在飞的旧请求作废
   }
-  if (loading.value || finished.value) return
 
+  if (fetching || finished.value) {
+    // 提前退出也必须把 loading 复位，否则 van-list 会一直转圈
+    loading.value = false
+    return
+  }
+
+  fetching = true
   loading.value = true
+  const seq = ++requestSeq
+
   try {
     const res = await http.get('/api/admin/news', {
       params: {
@@ -168,17 +186,23 @@ const fetchPage = async (reset = false) => {
         keyword: keyword.value.trim() || undefined
       }
     })
+    if (seq !== requestSeq) return
+
     const data = res.data?.data || {}
     const items = data.list || []
+    const total = data.total || 0
 
     list.value = [...list.value, ...items]
-    finished.value = items.length < PAGE_SIZE
+    // 用 total 判断比「这一页不满 10 条」更准：总数正好是 10 的倍数时不会多请求一次
+    finished.value = list.value.length >= total || items.length < PAGE_SIZE
     page.value += 1
   } catch (error) {
-    // 错误提示由 http 拦截器统一处理，这里只需要停止继续加载
-    finished.value = true
+    if (seq === requestSeq) finished.value = true
   } finally {
-    loading.value = false
+    if (seq === requestSeq) {
+      fetching = false
+      loading.value = false
+    }
   }
 }
 
