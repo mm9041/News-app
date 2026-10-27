@@ -9,28 +9,72 @@
     
     <div class="profile-container">
       <van-cell-group inset class="avatar-group">
-        <van-cell title="头像" center>
+        <van-cell title="头像" center is-link @click="openEditor">
           <template #right-icon>
-            <van-image
-              round
-              width="60"
-              height="60"
-              src="https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg"
-            />
+            <van-image round width="60" height="60" :src="avatarUrl" />
           </template>
         </van-cell>
       </van-cell-group>
       
       <van-cell-group inset class="info-group">
-        <van-cell title="用户名" :value="userInfo?.username || 'admin'" />
-        <van-cell title="账号ID" :value="`ID: heima-${userId || 'N/A'}`" />
-        <van-cell title="个人简介" :value="userBio || '暂无简介'" is-link @click="showBioDialog" />
+        <van-cell title="用户名" :value="userInfo?.username || '-'" />
+        <van-cell title="昵称" :value="userInfo?.nickname || '未设置'" />
+        <van-cell title="性别" :value="genderText" />
+        <van-cell title="手机号" :value="userInfo?.phone || '未绑定'" />
+        <van-cell title="个人简介" :value="userBio || '暂无简介'" />
+        <van-cell title="编辑资料" is-link @click="openEditor" />
       </van-cell-group>
       
       <van-cell-group inset class="security-group">
         <van-cell title="修改密码" is-link @click="showPasswordConfirm" />
       </van-cell-group>
     </div>
+
+    <!-- 编辑资料 -->
+    <van-popup v-model:show="showEditor" position="bottom" round :style="{ maxHeight: '85%' }">
+      <div class="editor">
+        <div class="editor-title">编辑资料</div>
+        <van-form @submit="saveProfile">
+          <van-field
+            v-model="form.nickname"
+            label="昵称"
+            maxlength="50"
+            placeholder="评论和留言里显示这个名字"
+          />
+          <van-field v-model="form.avatar" label="头像" placeholder="图片 URL" />
+          <van-field
+            v-model="form.genderText"
+            label="性别"
+            readonly
+            is-link
+            @click="showGenderPicker = true"
+          />
+          <van-field v-model="form.phone" label="手机号" maxlength="20" placeholder="选填" />
+          <van-field
+            v-model="form.bio"
+            label="简介"
+            type="textarea"
+            rows="3"
+            autosize
+            maxlength="500"
+            show-word-limit
+            placeholder="介绍一下自己"
+          />
+
+          <div class="editor-actions">
+            <van-button block type="primary" native-type="submit" :loading="saving">保存</van-button>
+          </div>
+        </van-form>
+      </div>
+    </van-popup>
+
+    <van-popup v-model:show="showGenderPicker" position="bottom" round>
+      <van-picker
+        :columns="genderColumns"
+        @confirm="onGenderConfirm"
+        @cancel="showGenderPicker = false"
+      />
+    </van-popup>
   </div>
 </template>
 
@@ -82,8 +126,83 @@ onMounted(async () => {
 });
 
 const userInfo = computed(() => userStore.userInfo);
-const userId = computed(() => userStore.token ? userStore.token.substring(0, 5) : '');
 const userBio = computed(() => userStore.userInfo?.bio || '暂无简介');
+const avatarUrl = computed(
+  () => userStore.userInfo?.avatar || 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg'
+);
+
+const GENDER_LABELS = { male: '男', female: '女', unknown: '保密' };
+const genderColumns = [
+  { text: '男', value: 'male' },
+  { text: '女', value: 'female' },
+  { text: '保密', value: 'unknown' }
+];
+const genderText = computed(() => GENDER_LABELS[userStore.userInfo?.gender] || '保密');
+
+const showEditor = ref(false);
+const showGenderPicker = ref(false);
+const saving = ref(false);
+const form = ref({
+  nickname: '',
+  avatar: '',
+  gender: 'unknown',
+  genderText: '保密',
+  bio: '',
+  phone: ''
+});
+
+const openEditor = () => {
+  const info = userStore.userInfo || {};
+  const gender = info.gender || 'unknown';
+  form.value = {
+    nickname: info.nickname || '',
+    avatar: info.avatar || '',
+    gender,
+    genderText: GENDER_LABELS[gender] || '保密',
+    bio: info.bio || '',
+    phone: info.phone || ''
+  };
+  showEditor.value = true;
+};
+
+const onGenderConfirm = ({ selectedOptions }) => {
+  const option = selectedOptions[0];
+  if (option) {
+    form.value.gender = option.value;
+    form.value.genderText = option.text;
+  }
+  showGenderPicker.value = false;
+};
+
+const saveProfile = async () => {
+  if (!userStore.getLoginStatus) {
+    router.push('/login');
+    return;
+  }
+
+  saving.value = true;
+  try {
+    // 昵称和简介允许传空串（就是清空）；头像、手机号留空表示「不修改」——
+    // phone 上有唯一索引，传空串会让第二个用户直接撞车
+    const payload = {
+      nickname: form.value.nickname.trim(),
+      bio: form.value.bio.trim(),
+      gender: form.value.gender
+    };
+    if (form.value.avatar.trim()) payload.avatar = form.value.avatar.trim();
+    if (form.value.phone.trim()) payload.phone = form.value.phone.trim();
+
+    const result = await userStore.updateUserProfile(payload);
+    if (result.success) {
+      showSuccessToast('已保存');
+      showEditor.value = false;
+    } else {
+      showFailToast(result.message || '保存失败');
+    }
+  } finally {
+    saving.value = false;
+  }
+};
 
 const showPasswordConfirm = () => {
   // 使用ref创建响应式变量
@@ -170,56 +289,6 @@ const showPasswordConfirm = () => {
   });
 };
 
-const showBioDialog = () => {
-  // 使用ref创建响应式变量
-  const newBioValue = ref(userBio.value);
-  
-  showDialog({
-    title: '修改个人简介',
-    showCancelButton: true,
-    confirmButtonText: '确认',
-    className: 'bio-dialog',
-    message: h('div', { style: 'text-align: left; padding: 10px 0;' }, [
-      h('div', { style: 'margin-bottom: 15px;' }, [
-        h('div', { style: 'margin-bottom: 5px; text-align: left;' }, '个人简介：'),
-        h('textarea', {
-          value: newBioValue.value,
-          onInput: (e) => { newBioValue.value = e.target.value },
-          style: 'width: 100%; border: 1px solid #dcdee0; border-radius: 4px; padding: 8px; box-sizing: border-box; min-height: 100px; resize: vertical;'
-        })
-      ])
-    ])
-  }).then(async () => {
-    // 点击确认按钮
-    try {
-      // 显示加载提示
-      const loadingInstance = showLoadingToast({
-        message: '保存中...',
-        forbidClick: true,
-        duration: 0
-      });
-      
-      
-      // 调用API更新个人简介
-      const result = await userStore.updateUserBio(newBioValue.value);
-      
-      // 关闭加载提示
-      loadingInstance.close();
-      
-      if (result && result.success) {
-        showSuccessToast('个人简介修改成功');
-      } else {
-        showFailToast((result && result.message) || '个人简介修改失败');
-      }
-    } catch (error) {
-      console.error('更新个人简介失败:', error);
-      showToast.clear();
-      showToast.fail('个人简介修改失败');
-    }
-  }).catch(() => {
-    // 点击取消按钮
-  });
-};
 </script>
 
 <style scoped>
@@ -231,6 +300,22 @@ const showBioDialog = () => {
 .profile-container {
   padding-top: 56px;
   padding-bottom: 20px;
+}
+
+.editor {
+  padding: 16px;
+}
+
+.editor-title {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.editor-actions {
+  margin-top: 20px;
+  padding: 0 4px 8px;
 }
 
 .avatar-group,

@@ -13,6 +13,21 @@
       </div>
     </div>
     
+    <div class="recommend-section" v-if="newsStore.recommendations.length">
+      <div class="recommend-header">猜你喜欢</div>
+      <div class="recommend-scroll">
+        <div
+          v-for="item in newsStore.recommendations"
+          :key="item.id"
+          class="recommend-card"
+          @click="goToNews(item.id)"
+        >
+          <img :src="item.image" :alt="item.title" @error="onImageError">
+          <div class="recommend-title">{{ item.title }}</div>
+        </div>
+      </div>
+    </div>
+
     <div class="category-tabs">
       <van-tabs v-model:active="activeTab" sticky swipeable animated>
         <van-tab 
@@ -46,12 +61,15 @@
 <script setup>
 import { ref, onMounted, onActivated, watch, computed, onBeforeUnmount } from 'vue'
 import { useNewsStore } from '../store/modules/news'
+import { useUserStore } from '../store/user'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import NewsItem from '../components/NewsItem.vue'
 import TabBar from '../components/TabBar.vue'
+import { onImageError } from '../config/image'
 
 const newsStore = useNewsStore()
+const userStore = useUserStore()
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
@@ -85,6 +103,14 @@ onMounted(() => {
     // 获取新闻列表
     newsStore.getNewsList()
   })
+
+  // 猜你喜欢只对登录用户有意义（游客直接看分类列表就够了）
+  if (userStore.getLoginStatus) {
+    newsStore.getRecommendations().then(() => {
+      // 推荐区会改变「更多」按钮的定位基准，渲染完重新算一次
+      setTimeout(updateTabsPosition, 50)
+    })
+  }
   
   // 初始化位置
   setTimeout(updateTabsPosition, 300)
@@ -129,6 +155,11 @@ const goSearch = () => {
   router.push('/search')
 }
 
+// 打开推荐卡片
+const goToNews = (id) => {
+  router.push(`/news/detail/${id}`)
+}
+
 // 获取分类导航栏的位置并设置滚动监听
 const updateTabsPosition = () => {
   const tabsElement = document.querySelector('.van-tabs__wrap')
@@ -157,6 +188,10 @@ onActivated(() => {
     return
   }
   newsStore.refreshViews()
+  // 未登录时看过首页、登录后切回来：补一次推荐
+  if (userStore.getLoginStatus && !newsStore.recommendations.length) {
+    newsStore.getRecommendations()
+  }
 })
 
 // 组件销毁前移除事件监听
@@ -190,6 +225,57 @@ const onLoad = () => {
   padding-bottom: 50px;
   background-color: #f7f8fa;
   min-height: 100vh;
+}
+
+.recommend-section {
+  background-color: #fff;
+  padding: 12px 0 10px;
+  margin-bottom: 8px;
+}
+
+.recommend-header {
+  font-size: 15px;
+  font-weight: 600;
+  color: #323233;
+  padding: 0 16px 8px;
+}
+
+.recommend-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 0 16px 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.recommend-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.recommend-card {
+  flex: 0 0 120px;
+  width: 120px;
+}
+
+.recommend-card img {
+  display: block;
+  width: 120px;
+  height: 78px;
+  object-fit: cover;
+  border-radius: 6px;
+  background-color: #f2f3f5;
+}
+
+.recommend-title {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #323233;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .category-tabs {

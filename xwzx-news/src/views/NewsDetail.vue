@@ -24,6 +24,13 @@
         <span>{{ newsStore.newsDetail.publishTime }}</span>
         <span>{{ newsStore.newsDetail.views }} 阅读</span>
       </div>
+
+      <div class="like-row">
+        <div class="like-btn" :class="{ 'is-liked': liked }" @click="toggleLike">
+          <van-icon :name="liked ? 'good-job' : 'good-job-o'" size="18" />
+          <span>{{ likes }} 赞</span>
+        </div>
+      </div>
       
       <div class="cover" v-if="newsStore.newsDetail.image">
         <img :src="newsStore.newsDetail.image" :alt="newsStore.newsDetail.title" @error="onImageError">
@@ -194,6 +201,10 @@ const toggleFavorite = async () => {
 const loadDetail = async () => {
   await newsStore.getNewsDetail(newsId.value)
 
+  // 点赞状态跟着详情一起刷新（切换到相关新闻时也要重置）
+  likes.value = newsStore.newsDetail.likes || 0
+  liked.value = Boolean(newsStore.newsDetail.isLiked)
+
   // 添加到浏览历史
   if (newsStore.newsDetail.id) {
     if (userStore.getLoginStatus) {
@@ -222,6 +233,37 @@ const loadDetail = async () => {
 
   // 正文加载完再拉评论；评论失败不该阻塞正文阅读
   await loadComments(true)
+}
+
+// ---------------------------- 点赞 ----------------------------
+
+const likes = ref(0)
+const liked = ref(false)
+const likeLoading = ref(false)
+
+const toggleLike = async () => {
+  if (!userStore.getLoginStatus) {
+    showToast('请先登录后再点赞')
+    router.push('/login')
+    return
+  }
+  if (likeLoading.value) return
+
+  likeLoading.value = true
+  try {
+    // PUT 点赞 / DELETE 取消，两者都幂等；不用 toggle 是为了弱网重试时不会翻回去
+    const res = liked.value
+      ? await http.delete(`/api/news/${newsId.value}/like`)
+      : await http.put(`/api/news/${newsId.value}/like`)
+
+    const data = res.data?.data || {}
+    liked.value = Boolean(data.liked)
+    likes.value = data.likes || 0
+  } catch (error) {
+    // 拦截器已提示
+  } finally {
+    likeLoading.value = false
+  }
 }
 
 // ---------------------------- 评论 ----------------------------
@@ -442,6 +484,31 @@ watch(newsId, (newId, oldId) => {
   line-height: 1.4;
   flex: 1;
 }
+/* ---------------------------- 点赞 ---------------------------- */
+.like-row {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 16px;
+}
+
+.like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 18px;
+  border: 1px solid #dcdee0;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #646566;
+  transition: all 0.2s;
+}
+
+.like-btn.is-liked {
+  border-color: #ee0a24;
+  color: #ee0a24;
+  background-color: #fff0f1;
+}
+
 /* ---------------------------- 评论 ---------------------------- */
 .comment-section {
   margin-top: 28px;

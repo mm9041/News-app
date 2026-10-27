@@ -25,7 +25,7 @@ from sqlalchemy import create_engine, inspect
 load_dotenv(BASE_DIR / ".env", override=False)
 
 # 必须把所有模型都导入进来，Base.metadata 才知道有哪些表
-from models import ai_chat, comment, favorite, history, news, users  # noqa: F401
+from models import ai_chat, comment, favorite, history, like, news, users  # noqa: F401
 from models.base import Base
 
 

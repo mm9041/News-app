@@ -138,40 +138,24 @@ export const useUserStore = defineStore('user', {
       }
     },
     
-    // 更新个人简介
-    async updateUserBio(bio) {
+    // 更新个人资料（昵称 / 头像 / 性别 / 简介 / 手机号）
+    async updateUserProfile(profile) {
+      if (!this.token) {
+        return { success: false, message: '未登录' };
+      }
       try {
-        // 检查是否有token
-        if (!this.token) {
-          return {
-            success: false,
-            message: '未登录'
-          };
-        }
-        
-        // 发送更新个人简介请求
-        const response = await http.put('/api/user/update', { bio });
-        
-        // 检查响应状态
+        const response = await http.put('/api/user/update', profile);
         if (response.data && response.data.code === 200) {
-          // 更新本地用户简介
-          this.userInfo.bio = bio;
-          
-          return {
-            success: true,
-            message: '更新个人简介成功'
-          };
-        } else {
-          return {
-            success: false,
-            message: response.data.message || '更新个人简介失败'
-          };
+          // 后端回的是完整用户信息，直接覆盖：昵称、头像、性别一次同步，
+          // 评论列表下次加载时也会显示新昵称
+          this.userInfo = response.data.data;
+          return { success: true, message: '保存成功' };
         }
+        return { success: false, message: response.data?.message || '保存失败' };
       } catch (error) {
-        console.error('更新个人简介请求失败:', error);
         return {
           success: false,
-          message: error.response?.data?.message || '更新个人简介请求失败，请稍后再试'
+          message: error.response?.data?.message || '保存失败，请稍后再试'
         };
       }
     },

@@ -166,6 +166,29 @@ CREATE TABLE IF NOT EXISTS `news_comment` (
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='新闻评论表';
 
+-- ----------------------------
+-- 新闻点赞表
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `news_like` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '点赞ID',
+  `news_id` INT UNSIGNED NOT NULL COMMENT '新闻ID',
+  `user_id` INT UNSIGNED NOT NULL COMMENT '用户ID',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '点赞时间',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `user_news_like_unique` (`user_id` ASC, `news_id` ASC),
+  INDEX `idx_news_like_news` (`news_id` ASC),
+  CONSTRAINT `fk_news_like_news`
+    FOREIGN KEY (`news_id`)
+    REFERENCES `news` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_news_like_user`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `user` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='新闻点赞表';
+
 -- 初始化数据
 -- 插入默认新闻分类
 INSERT INTO `news_category` (`name`, `sort_order`) VALUES 
@@ -601,4 +624,4 @@ INSERT INTO `news` (`title`, `description`, `content`, `image`, `author`, `categ
 -- 本地开发账号：admin / admin，已授予管理员权限（is_admin=1）。
 -- ⚠️ 这是弱密码，仅供本地调试；任何对外部署前都必须改掉。
 INSERT INTO `user` (`username`, `password`, `nickname`, `gender`, `bio`, `is_admin`) VALUES 
-('admin', '$2b$12$KqaA/gs.RAhrLEVZkDykRuJqw1G/H9TJq3FQ3XB0ZCQpFhDlKoKay', '测试用户', 'unknown', '这是一个测试账号', 1);
+('admin', '$2b$12$KqaA/gs.RAhrLEVZkDykRuJqw1G/H9TJq3FQ3XB0ZCQpFhDlKoKay', 'admin', 'unknown', '这是一个管理员账号', 1);

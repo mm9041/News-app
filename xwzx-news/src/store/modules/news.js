@@ -6,6 +6,7 @@ export const useNewsStore = defineStore('news', {
     newsList: [],
     newsDetail: {},
     categories: [],
+    recommendations: [],
     currentCategory: 1,
     loading: false,
     refreshing: false,
@@ -111,6 +112,18 @@ export const useNewsStore = defineStore('news', {
       } catch (error) {
         // 同步阅读量失败不该影响页面，静默处理
         console.error('同步阅读量失败:', error);
+      }
+    },
+
+    // 猜你喜欢：按收藏/浏览的分类偏好推荐，游客不请求（避免和列表内容重复）
+    async getRecommendations() {
+      try {
+        const response = await http.get('/api/news/recommend', { params: { limit: 8 } })
+        if (response.data && response.data.code === 200) {
+          this.recommendations = response.data.data.list || []
+        }
+      } catch (error) {
+        console.error('获取推荐失败:', error)
       }
     },
 

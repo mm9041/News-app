@@ -30,6 +30,8 @@ FastAPIProject/
 │   ├── news_cache.py       # 列表/详情/相关推荐
 │   ├── news_search.py      # 全文搜索（ngram + LIKE 兜底）
 │   ├── news_views.py       # 阅读量增量叠加与回写
+│   ├── recommend.py        # 个性化推荐
+│   ├── like.py             # 点赞
 │   ├── admin_news.py       # 后台新闻读写（含缓存失效）
 │   └── ...
 ├── cache/                  # Redis 操作（分类、列表、阅读量计数）
@@ -106,7 +108,10 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | GET | `/api/news/categories` | 否 | 分类列表（缓存 2h） |
 | GET | `/api/news/list?categoryId&page&pageSize` | 否 | 列表，按发布时间倒序 |
 | GET | `/api/news/search?keyword&page&pageSize` | 否 | 全文搜索（标题/摘要/正文） |
-| GET | `/api/news/detail?id` | 否 | 详情 + 相关推荐，并把阅读量 +1 |
+| GET | `/api/news/detail?id` | 否 | 详情 + 相关推荐 + 点赞状态，并把阅读量 +1 |
+| GET | `/api/news/recommend?limit` | 否 | 猜你喜欢；登录后按兴趣推荐，游客给热门 |
+| PUT | `/api/news/{id}/like` | 是 | 点赞（幂等） |
+| DELETE | `/api/news/{id}/like` | 是 | 取消点赞（幂等） |
 | GET | `/api/comment/list?newsId&page&pageSize` | 否 | 评论列表；登录后每项多返回 `canDelete` |
 | POST | `/api/comment/add` | 是 | 发表评论（≤500 字） |
 | DELETE | `/api/comment/{id}` | 是 | 删除评论（本人或管理员） |
@@ -154,6 +159,10 @@ python scripts/make_admin.py <用户名>
   会回退到 LIKE，原因写在 `crud/news_search.py` 顶部注释里。
 - **评论**：单层评论、不做楼中楼，删除即物理删除（新闻/用户被删时外键 CASCADE 一并清掉）。
   列表公开可读，`canDelete` 由后端算好（本人或管理员），前端不做二次判断。
+- **点赞**：`news_like` 表 `(user_id, news_id)` 唯一索引，PUT/DELETE 都是幂等的
+  （没用 toggle，就是怕弱网重试把状态翻回去）。点赞数不冗余到 `news` 表，实时 COUNT。
+- **推荐**：收藏权重 3、浏览权重 1，取 Top3 分类的未读新闻，不足用热门补齐（同样排除已读）；
+  游客或新用户直接给全站热门。
 
 ## 测试
 
