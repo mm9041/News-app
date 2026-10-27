@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from cache import view_counter
 from config.db_conf import AsyncSessionLocal, async_engine
 from crud.news_views import flush_view_deltas
-from routers import follow, news, users, favorite, history, ai, admin, comment, upload, notification, source, tag
+from routers import follow, news, users, favorite, history, ai, admin, comment, upload, notification, tag
 from utils.exception_handlers import register_exception_handlers
 from utils.logger import get_logger, setup_logging
 from utils.metrics import MetricsMiddleware, render_metrics
@@ -116,7 +116,6 @@ app.include_router(upload.router)
 app.include_router(notification.router)
 app.include_router(tag.router)
 app.include_router(follow.router)
-app.include_router(source.router)
 
 
 # ---------------------------- 可观测性 ----------------------------

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -18,12 +19,15 @@ class Follow(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "target_type", "target_id", name="user_target_unique"),
         Index("idx_target", "target_type", "target_id"),
+        Index("idx_follow_author", "target_type", "target_name"),
     )
 
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="关注ID")
     user_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("user.id"), nullable=False, comment="关注者ID")
     target_type: Mapped[str] = mapped_column(String(10), nullable=False, comment="类型：user / category")
-    target_id: Mapped[int] = mapped_column(UnsignedInt, nullable=False, comment="目标ID")
+    target_id: Mapped[int] = mapped_column(UnsignedInt, nullable=False, comment="目标ID（user/category 用，author 时为 0）")
+    # 作者是字符串（「海南日报」/「Dr. Chen」），target_type=author 时用这一列
+    target_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, comment="作者名")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False, comment="关注时间")
 
     def __repr__(self):

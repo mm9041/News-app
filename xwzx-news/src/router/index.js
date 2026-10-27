@@ -88,11 +88,11 @@ const routes = [
     }
   },
   {
-    path: '/source/:id',
-    name: 'SourceNews',
-    component: () => import('../views/SourceNews.vue'),
+    path: '/author/:name',
+    name: 'AuthorNews',
+    component: () => import('../views/AuthorNews.vue'),
     meta: {
-      title: '报纸',
+      title: '作者',
       keepAlive: false
     }
   },

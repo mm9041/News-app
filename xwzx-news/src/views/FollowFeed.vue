@@ -1,28 +1,28 @@
 <template>
   <div class="follow-page">
-    <van-nav-bar title="关注" left-arrow fixed @click-left="goBack" />
+    <van-nav-bar title="我的关注" left-arrow fixed @click-left="goBack" />
 
     <div class="panel">
-      <div class="panel-title">关注的报纸</div>
-      <div v-if="sources.length">
-        <div v-for="source in sources" :key="source.id" class="author-row" @click="goToSource(source.id)">
-          <van-icon name="newspaper-o" size="26" class="source-icon" />
+      <div class="panel-title">关注的作者</div>
+      <div v-if="authors.length">
+        <div
+          v-for="author in authors"
+          :key="author.name"
+          class="author-row"
+          @click="goToAuthor(author.name)"
+        >
+          <van-icon name="user-o" size="24" class="author-icon" />
           <div class="author-info">
-            <div class="author-name">{{ source.name }}</div>
-            <div class="author-meta">{{ source.newsCount }} 条新闻</div>
+            <div class="author-name">{{ author.name }}</div>
+            <div class="author-meta">{{ author.newsCount }} 条新闻</div>
           </div>
-          <van-button size="mini" plain type="primary" @click.stop="unfollow('source', source.id)">取关</van-button>
+          <van-icon name="arrow" class="row-arrow" />
+          <van-button size="mini" plain type="primary" @click.stop="unfollow(author.name)">
+            取关
+          </van-button>
         </div>
       </div>
-      <div v-else class="empty-text">还没有关注的报纸</div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">关注流</div>
-      <div v-if="list.length">
-        <news-item v-for="item in list" :key="item.id" :news="item" />
-      </div>
-      <van-empty v-else description="关注的作者/分类还没有新内容" image-size="60" />
+      <div v-else class="empty-text">还没有关注的作者</div>
     </div>
 
     <tab-bar />
@@ -35,41 +35,32 @@ import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 
 import http from '../api/http'
-import NewsItem from '../components/NewsItem.vue'
 import TabBar from '../components/TabBar.vue'
 import { useUserStore } from '../store/user'
 
 const router = useRouter()
 const userStore = useUserStore()
-const defaultAvatar = 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg'
 
-const sources = ref([])
-const list = ref([])
+const authors = ref([])
 
 const goBack = () => router.back()
 
-// 点报纸行进它的新闻列表；取关按钮用 @click.stop 不会触发这里
-const goToSource = id => router.push(`/source/${id}`)
-
 const loadAll = async () => {
-  const [sourcesRes, feedRes] = await Promise.all([
-    http.get('/api/follow/sources'),
-    http.get('/api/follow/feed', { params: { page: 1, pageSize: 20 } }),
-  ])
-  sources.value = sourcesRes.data?.data || []
-  list.value = feedRes.data?.data?.list || []
+  const res = await http.get('/api/follow/authors')
+  authors.value = res.data?.data || []
 }
 
-const unfollow = async (type, id) => {
+const goToAuthor = name => router.push(`/author/${encodeURIComponent(name)}`)
+
+const unfollow = async name => {
   try {
-    await showConfirmDialog({ title: '取消关注', message: '确定取消关注？' })
+    await showConfirmDialog({ title: '取消关注', message: `不再关注「${name}」？` })
   } catch (error) {
     return
   }
-  await http.delete('/api/follow', { data: { targetType: type, targetId: id } })
-  sources.value = sources.value.filter(item => item.id !== id)
+  await http.delete('/api/follow', { params: { name } })
+  authors.value = authors.value.filter(item => item.name !== name)
   showToast('已取消关注')
-  loadAll()
 }
 
 onMounted(() => {
@@ -107,21 +98,34 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 0;
+  padding: 10px 0;
+}
+
+.author-icon {
+  color: #1989fa;
 }
 
 .author-info {
   flex: 1;
+  min-width: 0;
 }
 
 .author-name {
   font-size: 14px;
   color: #323233;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .author-meta {
   font-size: 11px;
   color: #969799;
+}
+
+.row-arrow {
+  color: #c8c9cc;
+  flex-shrink: 0;
 }
 
 .empty-text {

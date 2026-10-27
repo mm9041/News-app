@@ -22,7 +22,7 @@
             :class="{ 'is-following': isFollowing }"
             @click="toggleFollow"
           >
-            {{ isFollowing ? '已关注' : `关注${followTarget.label}` }}
+            {{ isFollowing ? '已关注' : '关注作者' }}
           </div>
           <van-button
             class="favorite-btn"
@@ -259,12 +259,12 @@ const loadDetail = async () => {
   likes.value = newsStore.newsDetail.likes || 0
   liked.value = Boolean(newsStore.newsDetail.isLiked)
 
-  // 关注状态跟着当前目标（作者或分类）走
+  // 关注状态跟着当前作者走
   const target = followTarget.value
   if (target && userStore.getLoginStatus) {
     try {
       const res = await http.get('/api/follow/status', {
-        params: { targetType: target.type, targetId: target.id }
+        params: { name: target.name }
       })
       isFollowing.value = Boolean(res.data?.data?.following)
     } catch (error) {
@@ -340,11 +340,10 @@ const toggleLike = async () => {
 const isFollowing = ref(false)
 const followLoading = ref(false)
 
-// 关注对象：报纸。每条新闻都有来源（种子数据已迁移到 10 家报纸），所以按钮始终可见
+// 关注对象：作者（就是页面上显示的那个名字——可能是「海南日报」，也可能是人名）
 const followTarget = computed(() => {
-  const sourceId = newsStore.newsDetail.sourceId
-  if (sourceId) return { type: 'source', id: sourceId, label: '报纸' }
-  return null
+  const author = newsStore.newsDetail.author
+  return author ? { name: author, label: '作者' } : null
 })
 
 const toggleFollow = async () => {
@@ -362,17 +361,16 @@ const toggleFollow = async () => {
   try {
     if (isFollowing.value) {
       await http.delete('/api/follow', {
-        data: { targetType: target.type, targetId: target.id }
+        params: { name: target.name }
       })
       isFollowing.value = false
       showToast('已取消关注')
     } else {
-      await http.post('/api/follow', {
-        targetType: target.type,
-        targetId: target.id
+      await http.post('/api/follow', null, {
+        params: { name: target.name }
       })
       isFollowing.value = true
-      showToast('已关注报纸')
+      showToast('已关注作者')
     }
   } catch (error) {
     // 拦截器已提示
