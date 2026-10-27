@@ -59,6 +59,17 @@ CREATE TABLE IF NOT EXISTS `news_category` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='新闻分类表';
 
 -- 新闻表
+-- ----------------------------
+-- 报纸来源表
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `source` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '报纸ID',
+  `name` VARCHAR(50) NOT NULL COMMENT '报纸名称',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `name_UNIQUE` (`name` ASC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='报纸来源表';
+
 CREATE TABLE IF NOT EXISTS `news` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '新闻ID',
   `title` VARCHAR(255) NOT NULL COMMENT '新闻标题',
@@ -66,6 +77,7 @@ CREATE TABLE IF NOT EXISTS `news` (
   `content` TEXT NOT NULL COMMENT '新闻内容',
   `image` VARCHAR(255) NULL DEFAULT NULL COMMENT '封面图片URL',
   `author` VARCHAR(50) NULL DEFAULT NULL COMMENT '作者',
+  `source_id` INT UNSIGNED NULL DEFAULT NULL COMMENT '报纸来源ID',
   `category_id` INT UNSIGNED NOT NULL COMMENT '分类ID',
   `user_id` INT UNSIGNED NULL DEFAULT NULL COMMENT '发布者ID（后台创建的新闻才有）',
   `views` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '浏览量',
@@ -75,6 +87,7 @@ CREATE TABLE IF NOT EXISTS `news` (
   PRIMARY KEY (`id`),
   INDEX `fk_news_category_idx` (`category_id` ASC),
   INDEX `fk_news_user_idx` (`user_id` ASC),
+  INDEX `idx_news_source` (`source_id` ASC),
   INDEX `idx_publish_time` (`publish_time` DESC),
   INDEX `idx_category_publish` (`category_id` ASC, `publish_time` DESC, `id` DESC),
   -- 中文全文检索：ngram 分词器（MySQL 8 内置），ngram_token_size 默认 2，
