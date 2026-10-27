@@ -756,10 +756,10 @@ CREATE TABLE IF NOT EXISTS `follow` (
   `user_id` INT UNSIGNED NOT NULL COMMENT '关注者ID',
   `target_type` VARCHAR(10) NOT NULL COMMENT '类型：user / category',
   `target_id` INT UNSIGNED NOT NULL COMMENT '目标ID',
-  `target_name` VARCHAR(50) NULL DEFAULT NULL COMMENT '作者名（target_type=author 时）',
+  `target_name` VARCHAR(50) NOT NULL DEFAULT '' COMMENT '作者名（target_type=author 时）',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '关注时间',
   PRIMARY KEY (`id`),
-  UNIQUE INDEX `user_target_unique` (`user_id` ASC, `target_type` ASC, `target_id` ASC),
+  UNIQUE INDEX `user_target_unique` (`user_id` ASC, `target_type` ASC, `target_id` ASC, `target_name` ASC),
   INDEX `idx_target` (`target_type` ASC, `target_id` ASC),
   INDEX `idx_follow_author` (`target_type` ASC, `target_name` ASC),
   CONSTRAINT `fk_follow_user`

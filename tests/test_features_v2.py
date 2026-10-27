@@ -241,3 +241,22 @@ def test_author_news_pagination(client):
 
 def test_follow_requires_login(client):
     assert client.get("/api/follow/authors").status_code == 401
+
+
+def test_can_follow_multiple_authors(client, temp_user):
+    """回归：唯一索引曾漏 target_name，导致一个用户只能关注一个作者。"""
+    headers = _auth(temp_user)
+    names = ["海南日报", "人民日报", "科技日报"]
+
+    try:
+        for name in names:
+            resp = client.post("/api/follow", params={"name": name}, headers=headers)
+            assert resp.status_code == 200
+            assert resp.json()["data"]["following"] is True, f"关注 {name} 应该是新增"
+
+        authors = client.get("/api/follow/authors", headers=headers).json()["data"]
+        got = {a["name"] for a in authors}
+        assert set(names) <= got, f"期望全部关注成功，实际只有 {got}"
+    finally:
+        for name in names:
+            client.request("DELETE", "/api/follow", params={"name": name}, headers=headers)
