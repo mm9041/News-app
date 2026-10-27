@@ -7,7 +7,7 @@
           round
           width="80"
           height="80"
-          src="https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg"
+          :src="avatarUrl"
         />
       </div>
       <div class="info">
@@ -65,6 +65,11 @@ const { t } = useI18n();
 const userInfo = computed(() => userStore.userInfo);
 const isLogin = computed(() => userStore.getLoginStatus);
 const userBio = computed(() => userStore.getUserBio || t('profile.bio'));
+
+const defaultAvatar = 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg';
+// 头像以「个人信息」里设置的为准，没设置才回落到默认图。
+// 之前这里写死了 cat.jpeg，所以在个人信息页换了头像，这一页也不变。
+const avatarUrl = computed(() => userInfo.value?.avatar || defaultAvatar);
 
 // 未读通知数，显示在「消息通知」右侧
 const unreadCount = ref(0);
