@@ -1,4 +1,11 @@
 -- 新闻资讯应用数据库设计
+
+-- ⚠️ 必须在最前面声明客户端编码。
+-- 这个文件本身是 UTF-8，但 `mysql` 客户端在非交互模式下的默认 character_set_client
+-- 并不一定是 utf8mb4（Docker 官方镜像执行 docker-entrypoint-initdb.d 时就是如此）。
+-- 不声明的话，下面的中文 INSERT 会按 latin1 解释再存进库，读出来是「ä¸­æ–‡」这种乱码。
+SET NAMES utf8mb4;
+
 -- 创建数据库
 CREATE DATABASE IF NOT EXISTS news_app DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
