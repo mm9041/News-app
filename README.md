@@ -181,7 +181,17 @@ python scripts/make_admin.py <用户名>
 docker compose up -d --build
 ```
 
-- 前端 <http://localhost:8080>，后端 <http://localhost:8000>，账号 `admin / admin`
+**宿主机端口刻意错开**，可以和本机已装的服务共存：
+
+| 宿主机 | 容器 | 服务 |
+|---|---|---|
+| 13306 | 3306 | MySQL |
+| 16379 | 6379 | Redis |
+| 18000 | 8000 | 后端 |
+| 8080 | 80 | 前端 |
+
+- 前端 <http://localhost:8080>，后端 <http://localhost:18000>，账号 `admin / admin`
+- 容器之间用服务名互访（`mysql:3306` / `backend:8000`），宿主机映射只影响你从外部访问
 - 首次启动会自动执行 `database.sql`，建表并灌入示例新闻
 - 数据库和上传的图片都在 named volume 里，`docker compose down` 不丢数据，加 `-v` 才会删
 - 前端构建时把 `VITE_API_BASE_URL` 设成空串，请求走 nginx 反代到后端，因此**不经过 CORS**

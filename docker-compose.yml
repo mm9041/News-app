@@ -6,6 +6,13 @@
 #
 # 访问：http://localhost:8080    账号 admin / admin
 #
+# ⚠️ 宿主机端口刻意错开，避免和本机已装的 MySQL(3306) / Redis(6379) / 后端(8000) 抢端口：
+#     MySQL    13306 -> 容器 3306
+#     Redis    16379 -> 容器 6379
+#     后端     18000 -> 容器 8000
+#     前端      8080 -> 容器 80
+#   容器之间用服务名互访（mysql:3306 / redis:6379 / backend:8000），不受宿主机映射影响。
+#
 # 变量默认读同目录的 .env（DB_PASSWORD、AI_* 等），没配就用下面的默认值。
 
 services:
@@ -25,7 +32,8 @@ services:
       # 只在数据卷为空时执行一次，用来建表 + 灌示例新闻
       - ./database.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     ports:
-      - "3306:3306"
+      # 宿主机用 13306，避开本机的 3306
+      - "13306:3306"
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 5s
@@ -35,7 +43,8 @@ services:
   redis:
     image: redis:8-alpine
     ports:
-      - "6379:6379"
+      # 宿主机用 16379，避开本机（或已有容器）占用的 6379
+      - "16379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -54,7 +63,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       # 前端走同一个 nginx，同源请求其实用不到 CORS；这里留白名单方便直连调试
-      CORS_ALLOW_ORIGINS: http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173
+      CORS_ALLOW_ORIGINS: http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://localhost:18000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       AI_CHAT_URL: ${AI_CHAT_URL:-}
       AI_API_KEY: ${AI_API_KEY:-}
@@ -65,7 +74,8 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      # 宿主机用 18000，避开本地跑着的 uvicorn(8000)
+      - "18000:8000"
     volumes:
       # 上传的图片要持久化，否则重建容器就丢了
       - uploads:/app/uploads
