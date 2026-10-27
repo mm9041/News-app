@@ -5,13 +5,13 @@
     <div class="panel">
       <div class="panel-title">关注的报纸</div>
       <div v-if="sources.length">
-        <div v-for="source in sources" :key="source.id" class="author-row">
+        <div v-for="source in sources" :key="source.id" class="author-row" @click="goToSource(source.id)">
           <van-icon name="newspaper-o" size="26" class="source-icon" />
           <div class="author-info">
             <div class="author-name">{{ source.name }}</div>
             <div class="author-meta">{{ source.newsCount }} 条新闻</div>
           </div>
-          <van-button size="mini" plain type="primary" @click="unfollow('source', source.id)">取关</van-button>
+          <van-button size="mini" plain type="primary" @click.stop="unfollow('source', source.id)">取关</van-button>
         </div>
       </div>
       <div v-else class="empty-text">还没有关注的报纸</div>
@@ -47,6 +47,9 @@ const sources = ref([])
 const list = ref([])
 
 const goBack = () => router.back()
+
+// 点报纸行进它的新闻列表；取关按钮用 @click.stop 不会触发这里
+const goToSource = id => router.push(`/source/${id}`)
 
 const loadAll = async () => {
   const [sourcesRes, feedRes] = await Promise.all([

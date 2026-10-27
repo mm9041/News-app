@@ -88,6 +88,15 @@ const routes = [
     }
   },
   {
+    path: '/source/:id',
+    name: 'SourceNews',
+    component: () => import('../views/SourceNews.vue'),
+    meta: {
+      title: '报纸',
+      keepAlive: false
+    }
+  },
+  {
     path: '/search',
     name: 'Search',
     component: () => import('../views/Search.vue'),

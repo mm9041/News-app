@@ -233,3 +233,49 @@ def test_follow_source_and_feed(client, temp_user):
 def test_news_detail_returns_source_id(client):
     detail = client.get("/api/news/detail", params={"id": 1}).json()["data"]
     assert detail["sourceId"] is not None
+
+
+def test_source_news_list(client):
+    """报纸详情页：列表、报纸名、分页。"""
+    resp = client.get("/api/source/1/news", params={"page": 1, "pageSize": 5})
+    assert resp.status_code == 200
+
+    data = resp.json()["data"]
+    assert data["source"]["id"] == 1
+    assert data["source"]["name"] == "海南日报"
+    assert 0 < len(data["list"]) <= 5
+    assert data["total"] >= 40
+    assert data["hasMore"] is True
+
+    # 第二页的内容不能和第一页重复
+    page2 = client.get("/api/source/1/news", params={"page": 2, "pageSize": 5}).json()["data"]
+    ids1 = {i["id"] for i in data["list"]}
+    ids2 = {i["id"] for i in page2["list"]}
+    assert not ids1 & ids2
+
+
+def test_source_not_found(client):
+    assert client.get("/api/source/999999/news").status_code == 404
+
+
+def test_source_news_list(client):
+    """报纸详情页：列表、报纸名、分页。"""
+    resp = client.get("/api/source/1/news", params={"page": 1, "pageSize": 5})
+    assert resp.status_code == 200
+
+    data = resp.json()["data"]
+    assert data["source"]["id"] == 1
+    assert data["source"]["name"] == "海南日报"
+    assert 0 < len(data["list"]) <= 5
+    assert data["total"] >= 40
+    assert data["hasMore"] is True
+
+    # 第二页的内容不能和第一页重复
+    page2 = client.get("/api/source/1/news", params={"page": 2, "pageSize": 5}).json()["data"]
+    ids1 = {i["id"] for i in data["list"]}
+    ids2 = {i["id"] for i in page2["list"]}
+    assert not ids1 & ids2
+
+
+def test_source_not_found(client):
+    assert client.get("/api/source/999999/news").status_code == 404
