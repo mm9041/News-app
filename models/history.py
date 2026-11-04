@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index
+from sqlalchemy import DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, UnsignedInt
@@ -16,6 +16,10 @@ class History(Base):
 
     # 创建索引
     __table_args__ = (
+        # 一个人对同一篇新闻只该有一条历史记录。有了这条唯一索引，
+        # add_history 才能用 ON DUPLICATE KEY UPDATE 做幂等 upsert；
+        # 没有它的话「先查后插」在并发下会插出重复行。
+        UniqueConstraint('user_id', 'news_id', name='user_news_unique'),
         Index('fk_history_user_idx', 'user_id'),
         Index('fk_history_news_idx', 'news_id'),
         Index('idx_view_time', 'view_time'),

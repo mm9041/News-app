@@ -1,11 +1,51 @@
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import AfterValidator, BaseModel, Field, ConfigDict
+
+# bcrypt 只处理前 72 字节，且 5.0 起对超长输入直接抛错（不再静默截断）。
+# 在 schema 层就拦掉，让它变成可读的 422，而不是走到 crud 里抛 ValueError 变成 500。
+BCRYPT_MAX_BYTES = 72
+
+
+def _check_bcrypt_bytes(password: str) -> str:
+    raw = password.encode("utf-8")
+    if len(raw) > BCRYPT_MAX_BYTES:
+        raise ValueError(
+            f"密码过长：UTF-8 编码后 {len(raw)} 字节，上限 {BCRYPT_MAX_BYTES} 字节"
+            "（一个汉字占 3 字节）"
+        )
+    return password
+
+
+# 注意：max_length 数的是**字符**，中文密码 30 个字就是 90 字节，
+# 所以字符长度之外还要单独校验字节数。
+BcryptPassword = Annotated[str, AfterValidator(_check_bcrypt_bytes)]
+
+
+class UserRegisterRequest(BaseModel):
+    """注册请求。
+
+    强度约束只加在这里：登录用的是另一个模型（见 `UserRequest`），
+    否则 5 位的老密码会被 422 挡在登录页外面。
+    """
+
+    username: str = Field(..., min_length=3, max_length=50, description="用户名")
+    password: BcryptPassword = Field(
+        ..., min_length=6, max_length=72, description="密码"
+    )
 
 
 class UserRequest(BaseModel):
-    username: str
-    password: str
+    """登录请求。
+
+    ⚠️ 刻意**不加** min_length：
+    - 用户名/密码长度不合规属于「凭证不对」，应该由 authenticate_user 返回 401；
+    - 种子账号 admin/admin 只有 5 位密码，加 min_length=6 会直接把它锁死。
+    只挡住超长输入（否则 bcrypt 抛错会变成 500）。
+    """
+
+    username: str = Field(..., max_length=50, description="用户名")
+    password: BcryptPassword = Field(..., max_length=72, description="密码")
 
 
 # user_info 对应的类：基础类 + Info 类（id、用户名）
@@ -58,5 +98,7 @@ class UserUpdateRequest(BaseModel):
 
 
 class UserChangePasswordRequest(BaseModel):
-    old_password: str = Field(..., alias="oldPassword", description="旧密码")
-    new_password: str = Field(..., min_length=6, alias="newPassword", description="新密码")
+    old_password: BcryptPassword = Field(..., alias="oldPassword", description="旧密码")
+    new_password: BcryptPassword = Field(
+        ..., min_length=6, max_length=72, alias="newPassword", description="新密码"
+    )

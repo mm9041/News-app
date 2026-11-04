@@ -37,14 +37,6 @@ redis_client = redis.Redis(
 )
 
 
-async def get_cache(key: str):
-    try:
-        return await redis_client.get(key)
-    except Exception as e:
-        logger.warning("获取缓存失败：%s", e)
-        return None
-
-
 async def get_json_cache(key: str):
     try:
         data = await redis_client.get(key)

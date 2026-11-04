@@ -123,14 +123,6 @@ async def delete_conversation(db: AsyncSession, conv: AiConversation) -> None:
     await db.commit()
 
 
-async def count_conversations(db: AsyncSession, user_id: int) -> int:
-    return (
-        await db.execute(
-            select(func.count(AiConversation.id)).where(AiConversation.user_id == user_id)
-        )
-    ).scalar_one()
-
-
 async def get_chat_list(db: AsyncSession, user_id: int, page: int = 1, page_size: int = 20):
     """分页取某个用户的聊天记录，按时间**倒序**返回 (记录列表, 总数)。
 

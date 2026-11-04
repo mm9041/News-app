@@ -9,6 +9,7 @@ from datetime import datetime
 from cache import view_counter
 from config.cache_conf import get_json_cache, redis_client, set_cache
 from cache.news_cache import (
+    DETAIL_CACHE_PREFIX,
     get_cached_categories,
     set_cache_categories,
     get_cached_news_list,
@@ -22,7 +23,6 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-DETAIL_CACHE_PREFIX = "news:detail:"
 DETAIL_LOCK_PREFIX = "lock:news:detail:"
 DETAIL_TTL_BASE = 120
 DETAIL_TTL_JITTER = 60      # 抖动范围，避免同批 key 同时过期（雪崩）
@@ -80,6 +80,16 @@ async def get_news_count(db: AsyncSession, category_id: int):
     stmt = select(func.count(News.id)).where(News.category_id == category_id)
     result = await db.execute(stmt)
     return result.scalar_one()
+
+
+async def news_exists(db: AsyncSession, news_id: int) -> bool:
+    """只查主键在不在，给收藏 / 浏览历史这类写操作做 404 前置判断。
+
+    不复用 `get_news_detail`：那个会把整行塞进详情缓存，
+    而「收藏一个不存在的 id」完全不值得占一份缓存。
+    """
+    result = await db.execute(select(News.id).where(News.id == news_id))
+    return result.scalar_one_or_none() is not None
 
 
 def _dump_news(news: News) -> dict:

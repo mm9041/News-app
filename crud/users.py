@@ -3,12 +3,12 @@ import secrets
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.comment import NewsComment
 from models.users import User, UserToken
-from schemas.users import UserRequest, UserUpdateRequest
+from schemas.users import UserRegisterRequest, UserUpdateRequest
 from utils import security
 
 
@@ -28,7 +28,7 @@ async def get_user_by_username(db: AsyncSession, username: str):
     return result.scalar_one_or_none()
 
 
-async def create_user(db: AsyncSession, user_data: UserRequest):
+async def create_user(db: AsyncSession, user_data: UserRegisterRequest):
     user = User(username=user_data.username, password=security.get_hash_password(user_data.password))
     db.add(user)
     await db.commit()
@@ -138,30 +138,3 @@ async def change_password(db: AsyncSession, user: User, old_password: str, new_p
     await db.commit()
     await db.refresh(user)
     return True
-
-
-async def list_users_for_admin(db: AsyncSession, keyword: str | None, skip: int, limit: int):
-    """管理员看用户列表，每行带评论数。"""
-    conditions = []
-    if keyword and keyword.strip():
-        kw = keyword.strip()
-        conditions.append(
-            User.username.contains(kw, autoescape=True)
-            | User.nickname.contains(kw, autoescape=True)
-        )
-
-    total = (
-        await db.execute(select(func.count(User.id)).where(*conditions))
-    ).scalar_one()
-
-    stmt = (
-        select(User, func.count(NewsComment.id))
-        .outerjoin(NewsComment, NewsComment.user_id == User.id)
-        .where(*conditions)
-        .group_by(User.id)
-        .order_by(User.created_at.desc(), User.id.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-    rows = (await db.execute(stmt)).all()
-    return [(row[0], row[1]) for row in rows], total

@@ -3,15 +3,15 @@ import os
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from cache import view_counter
-from config.db_conf import AsyncSessionLocal, async_engine
+from config.db_conf import AsyncSessionLocal
 from crud.news_views import flush_view_deltas
-from routers import follow, news, users, favorite, history, ai, admin, comment, upload, notification, tag
+from routers import follow, news, users, favorite, history, ai, admin, comment, upload, notification, tag, source
 from utils.exception_handlers import register_exception_handlers
 from utils.logger import get_logger, setup_logging
 from utils.metrics import MetricsMiddleware, render_metrics
@@ -97,6 +97,10 @@ app.add_middleware(
     allow_credentials=False,  # 用 Authorization 头，不依赖 cookie
     allow_methods=["*"],
     allow_headers=["*"],
+    # 必须显式暴露自定义响应头，否则跨域时 fetch 读不到它：
+    # AIChat.vue 靠 X-Conversation-Id 拿新建会话的 id，读不到就会在下一轮
+    # 又开一个新会话（同源部署时不受影响，所以这个坑只在开发环境暴露）。
+    expose_headers=["X-Conversation-Id", "X-Request-ID"],
 )
 
 
@@ -116,19 +120,38 @@ app.include_router(upload.router)
 app.include_router(notification.router)
 app.include_router(tag.router)
 app.include_router(follow.router)
+app.include_router(source.router)
 
 
 # ---------------------------- 可观测性 ----------------------------
 
 @app.get("/health")
-async def health():
-    """依赖探测：任一依赖挂了返回 503，供负载均衡 / 监控探针使用。"""
+async def health(strict: bool = Query(False, description="严格模式：Redis 不可用也算失败")):
+    """依赖探测。
+
+    MySQL 是硬依赖，挂了返回 503。
+    Redis 是可选的加速层 —— 缓存能降级回源、限流故障时放行、阅读量退回直写库，
+    所以默认只在响应体里标 `degraded` 但仍返回 200。否则负载均衡 / K8s 探针
+    会把一个功能完全正常的实例摘掉（实测过：Redis 一停，业务接口全 200，/health 却 503）。
+    需要"Redis 也必须活"的探针传 `?strict=true`。
+    """
     async with AsyncSessionLocal() as db:
         checks = await probe_dependencies(db)
-    ok = all(check["ok"] for check in checks.values())
+
+    mysql_ok = checks["mysql"]["ok"]
+    redis_ok = checks["redis"]["ok"]
+
+    if not mysql_ok:
+        status_text = "down"
+    elif redis_ok:
+        status_text = "up"
+    else:
+        status_text = "degraded"
+
+    ok = mysql_ok and (redis_ok or not strict)
     return JSONResponse(
         status_code=200 if ok else 503,
-        content={"status": "up" if ok else "degraded", "checks": checks},
+        content={"status": status_text, "checks": checks},
     )
 
 
@@ -139,36 +162,6 @@ async def metrics_endpoint():
 
 
 setup_slow_query_logging()
-app.include_router(follow.router)
-
-# 上传的图片直接由 FastAPI 托管；生产环境应该换成 nginx / 对象存储
-UPLOAD_ROOT = BASE_DIR / "uploads"
-UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")
-
-
-# ---------------------------- 可观测性 ----------------------------
-
-@app.get("/health")
-async def health():
-    """依赖探测：任一依赖挂了返回 503，供负载均衡 / 监控探针使用。"""
-    async with AsyncSessionLocal() as db:
-        checks = await probe_dependencies(db)
-    ok = all(check["ok"] for check in checks.values())
-    return JSONResponse(
-        status_code=200 if ok else 503,
-        content={"status": "up" if ok else "degraded", "checks": checks},
-    )
-
-
-@app.get("/metrics")
-async def metrics():
-    """Prometheus 抓取端点（文本格式）。"""
-    return Response(content=render_metrics(), media_type="text/plain; version=0.0.4; charset=utf-8")
-
-
-setup_slow_query_logging()
-app.include_router(tag.router)
 
 # 上传的图片直接由 FastAPI 托管；生产环境应该换成 nginx / 对象存储
 UPLOAD_ROOT = BASE_DIR / "uploads"

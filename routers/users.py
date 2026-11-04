@@ -6,7 +6,14 @@ from config.db_conf import get_database
 from crud import users
 from crud.users import create_user, get_user_by_username, create_token, update_user
 from models.users import User
-from schemas.users import UserRequest, UserAuthResponse, UserInfoResponse, UserUpdateRequest, UserChangePasswordRequest
+from schemas.users import (
+    UserRegisterRequest,
+    UserRequest,
+    UserAuthResponse,
+    UserInfoResponse,
+    UserUpdateRequest,
+    UserChangePasswordRequest,
+)
 from utils.auth import get_current_user
 from utils.rate_limit import client_ip, enforce
 from utils.response import success_response
@@ -15,7 +22,7 @@ router = APIRouter(prefix="/api/user", tags=["user"])
 
 
 @router.post("/register")
-async def register(user_data: UserRequest, request: Request, db: AsyncSession = Depends(get_database)):
+async def register(user_data: UserRegisterRequest, request: Request, db: AsyncSession = Depends(get_database)):
     # 防批量注册：同一 IP 每分钟最多 5 个账号
     await enforce(f"register:{client_ip(request)}", 5, 60, "注册过于频繁，请 1 分钟后再试")
     if await get_user_by_username(db, user_data.username):

@@ -14,6 +14,7 @@ from sqlalchemy import update
 from config.db_conf import get_database
 from crud import admin_news, stats
 from crud import tag as tag_crud
+from crud import users as users_crud
 from models.users import User
 from schemas.admin import (
     AdminFlagRequest,
@@ -125,8 +126,6 @@ async def list_users(
         keyword: Optional[str] = Query(None, max_length=50),
         db: AsyncSession = Depends(get_database),
 ):
-    from crud import users as users_crud
-
     skip = (page - 1) * page_size
     rows, total = await users_crud.list_users_for_admin(db, keyword, skip, page_size)
 

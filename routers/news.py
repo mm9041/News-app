@@ -11,6 +11,8 @@ from crud import notification as notification_crud
 from crud import recommend as recommend_crud
 from crud import tag as tag_crud
 from models.like import NewsLike
+from models.news import News
+from models.tag import Tag
 from models.users import User
 from schemas.base import NewsItemBase
 from utils.auth import get_current_user, get_optional_user
@@ -100,8 +102,6 @@ async def get_news_detail(
 
     # 点赞统计 + 是否已赞合并成一条 SQL（原来是两次往返，压测显示这是主要延迟之一）
     if current_user:
-        from sqlalchemy import case
-
         likes_stmt = select(
             func.count(NewsLike.id),
             func.coalesce(func.sum(case((NewsLike.user_id == current_user.id, 1), else_=0)), 0),

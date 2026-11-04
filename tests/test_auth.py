@@ -1,6 +1,37 @@
 """认证相关：token 只存哈希、明文可用于鉴权、未登录/错误凭证的行为。"""
 
+import pytest
+from pydantic import ValidationError
+
 from crud.users import hash_token
+from schemas.users import UserRegisterRequest, UserRequest
+
+
+def test_register_schema_rejects_weak_credentials():
+    """注册的强度约束必须在 schema 层挡住，别走到 bcrypt 才炸成 500。"""
+    with pytest.raises(ValidationError):
+        UserRegisterRequest(username="ab", password="123456")  # 用户名太短
+
+    with pytest.raises(ValidationError):
+        UserRegisterRequest(username="abc", password="")  # 空密码
+
+    with pytest.raises(ValidationError):
+        # 51 字符：原来没有 max_length，会撞 VARCHAR(50) 变成 500
+        UserRegisterRequest(username="a" * 51, password="123456")
+
+    with pytest.raises(ValidationError):
+        # 30 个汉字 = 90 字节，字符长度合法但超过 bcrypt 的 72 字节
+        UserRegisterRequest(username="abc", password="密" * 30)
+
+
+def test_login_schema_keeps_legacy_short_password():
+    """登录不能套用注册的强度规则：种子账号 admin/admin 只有 5 位。"""
+    data = UserRequest(username="admin", password="admin")
+    assert data.password == "admin"
+
+    # 超长密码在 schema 拦下（否则 bcrypt 抛 ValueError → 500）
+    with pytest.raises(ValidationError):
+        UserRequest(username="admin", password="a" * 73)
 
 
 def test_hash_token_is_sha256_hex():

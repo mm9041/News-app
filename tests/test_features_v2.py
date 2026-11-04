@@ -197,35 +197,63 @@ def test_stats_shape(client, admin_user):
 # ---------------------------------------------------------------- 作者关注
 
 
-def test_follow_author_and_list(client, temp_user):
-    """关注作者 → 列表可见 → 该作者的新闻能查到 → 取关。"""
+def test_follow_author_and_list(client, temp_user, db):
+    """关注作者 → 列表可见 → total 是全量计数（不是本页长度）→ 取关。
+
+    这条用例原来写的是 `total >= 40`，本意是「total 必须是全量计数、不能等于本页条数」，
+    但用一个魔数表达这个意图，种子数据一缩水就误报（库里只剩 12 条 → 假失败）。
+    改成从库里现算期望值，再翻完所有页比对，既与原意一致，也不再依赖数据规模。
+    """
+    author = "海南日报"
     headers = _auth(temp_user)
 
+    with db.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM news WHERE author=%s", (author,))
+        expected = cur.fetchone()[0]
+    assert expected > 0, "种子数据里没有该作者的新闻，用例前提不成立"
+
     try:
-        resp = client.post("/api/follow", params={"name": "海南日报"}, headers=headers)
+        resp = client.post("/api/follow", params={"name": author}, headers=headers)
         assert resp.status_code == 200
 
         authors = client.get("/api/follow/authors", headers=headers).json()["data"]
-        assert any(a["name"] == "海南日报" and a["newsCount"] > 0 for a in authors)
+        assert any(
+            a["name"] == author and a["newsCount"] == expected for a in authors
+        ), "关注列表里的新闻数应与库内一致"
 
-        news = client.get(
-            "/api/follow/news", params={"name": "海南日报", "page": 1, "pageSize": 20}, headers=headers
-        ).json()["data"]
-        assert news["author"] == "海南日报"
-        assert news["total"] >= 40
-        assert news["list"]
+        # 用固定的小页长翻完全部页：既验证 total 是全量计数，
+        # 也验证分页不重不漏（这两点是原断言真正想守的东西）。
+        page_size = 5
+        seen: list[int] = []
+        page = 1
+        while True:
+            data = client.get(
+                "/api/follow/news",
+                params={"name": author, "page": page, "pageSize": page_size},
+                headers=headers,
+            ).json()["data"]
+            assert data["author"] == author
+            assert data["total"] == expected, f"第 {page} 页的 total 与库内条数不一致"
+            seen.extend(item["id"] for item in data["list"])
+            if not data["hasMore"]:
+                break
+            page += 1
+            assert page <= expected // page_size + 2, "hasMore 一直为 True，疑似死循环"
+
+        assert len(seen) == expected, "翻页拿到的条数与 total 不一致"
+        assert len(set(seen)) == expected, "翻页出现重复条目"
 
         status_data = client.get(
-            "/api/follow/status", params={"name": "海南日报"}, headers=headers
+            "/api/follow/status", params={"name": author}, headers=headers
         ).json()["data"]
         assert status_data["following"] is True
 
         # 幂等：重复关注不产生重复条目
-        client.post("/api/follow", params={"name": "海南日报"}, headers=headers)
+        client.post("/api/follow", params={"name": author}, headers=headers)
         authors_again = client.get("/api/follow/authors", headers=headers).json()["data"]
-        assert len([a for a in authors_again if a["name"] == "海南日报"]) == 1
+        assert len([a for a in authors_again if a["name"] == author]) == 1
     finally:
-        client.request("DELETE", "/api/follow", params={"name": "海南日报"}, headers=headers)
+        client.request("DELETE", "/api/follow", params={"name": author}, headers=headers)
 
 
 def test_author_news_pagination(client):

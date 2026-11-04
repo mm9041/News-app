@@ -23,5 +23,12 @@ def get_hash_password(password: str) -> str:
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    """校验明文密码与库中哈希是否匹配。"""
-    return bcrypt.checkpw(_to_bytes(password), hashed.encode("utf-8"))
+    """校验明文密码与库中哈希是否匹配。
+
+    超长密码（>72 字节）在这里按「不匹配」处理，而不是让它抛 ValueError：
+    登录接口不应该因为用户多打了几个字就返回 500。
+    """
+    try:
+        return bcrypt.checkpw(_to_bytes(password), hashed.encode("utf-8"))
+    except ValueError:
+        return False

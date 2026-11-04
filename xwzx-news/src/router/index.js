@@ -197,13 +197,11 @@ const router = createRouter({
   }
 })
 
-// 全局前置守卫
-router.beforeEach((to, from, next) => {
-  // 设置页面标题
+// 只负责设置页面标题。
+// 登录 / 管理员拦截在 router/guard.js 里（那里能 import store，
+// 不会形成 router -> store -> api/http -> router 的循环依赖）。
+router.beforeEach((to) => {
   document.title = to.meta.title || '新闻资讯'
-  
-  // 直接允许访问所有页面
-  next()
 })
 
 export default router

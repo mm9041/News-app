@@ -25,7 +25,10 @@
             name="username"
             label="用户名"
             placeholder="请输入用户名"
-            :rules="[{ required: true, message: '请填写用户名' }]"
+            :rules="[
+              { required: true, message: '请填写用户名' },
+              { validator: validateUsername, message: '用户名需 3-50 个字符' }
+            ]"
           />
           <van-field
             v-model="password"
@@ -33,7 +36,10 @@
             name="password"
             label="密码"
             placeholder="请输入密码"
-            :rules="[{ required: true, message: '请填写密码' }]"
+            :rules="[
+              { required: true, message: '请填写密码' },
+              { validator: validatePasswordLength, message: '密码需 6-72 位' }
+            ]"
           />
           <van-field
             v-model="confirmPassword"
@@ -74,6 +80,19 @@ const userStore = useUserStore();
 const username = ref('');
 const password = ref('');
 const confirmPassword = ref('');
+
+// 与后端 schemas/users.py 的 UserRegisterRequest 对齐：
+// username 3-50 字符、password 6-72 字符（且不超过 bcrypt 的 72 字节）。
+// 前端先挡一道，用户不用等一次 422 才知道密码太短。
+const validateUsername = (val) => {
+  const n = (val || '').trim().length;
+  return n >= 3 && n <= 50;
+};
+
+const validatePasswordLength = (val) => {
+  const n = (val || '').length;
+  return n >= 6 && n <= 72;
+};
 
 // 验证两次密码是否一致
 const validatePassword = () => {

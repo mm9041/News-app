@@ -93,19 +93,43 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
+# 约束名 -> 面向用户的文案。
+#
+# pymysql 的报错串形如 `Duplicate entry '3-45' for key 'favorite.user_news_unique'`，
+# 只判断 "Duplicate entry" 会把「重复收藏」也说成「用户名已存在」——
+# 实测踩过：同一篇新闻收藏两次，前端弹出"用户名已存在"。
+# 顺序上把更具体的放前面（news_like 的唯一索引名里也含 news）。
+_CONSTRAINT_MESSAGES = (
+    ("username_UNIQUE", "用户名已存在"),
+    ("phone_UNIQUE", "该手机号已被其他账号使用"),
+    ("token_UNIQUE", "登录状态冲突，请重新登录"),
+    ("user_news_like_unique", "已经点过赞了"),
+    ("user_news_unique", "已经收藏过这条新闻了"),
+    ("news_tag_unique", "同一篇新闻不能重复挂同一个标签"),
+    ("name_UNIQUE", "名称已存在"),
+)
+
+
+def _integrity_detail(error_msg: str) -> str:
+    for constraint, message in _CONSTRAINT_MESSAGES:
+        if constraint in error_msg:
+            return message
+    if "FOREIGN KEY" in error_msg:
+        return "关联数据不存在"
+    if "Duplicate entry" in error_msg:
+        # 命中了唯一索引但没匹配到具体约束名：按「重复提交」处理，
+        # 至少不能说成是用户名的问题。
+        return "数据已存在，请勿重复提交"
+    return "数据约束冲突，请检查输入"
+
+
 async def integrity_error_handler(request: Request, exc: IntegrityError):
     """
     处理数据库完整性约束错误
     """
     error_msg = str(exc.orig)
 
-    # 判断具体的约束错误类型
-    if "username_UNIQUE" in error_msg or "Duplicate entry" in error_msg:
-        detail = "用户名已存在"
-    elif "FOREIGN KEY" in error_msg:
-        detail = "关联数据不存在"
-    else:
-        detail = "数据约束冲突，请检查输入"
+    detail = _integrity_detail(error_msg)
 
     # 开发模式下返回详细错误信息
     error_data = None

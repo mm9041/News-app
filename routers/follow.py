@@ -1,6 +1,6 @@
 """关注作者：关注/取关/状态/关注列表 + 作者的新闻列表。"""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.db_conf import get_database
