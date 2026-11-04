@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Integer, String, Index, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Integer, String, Index, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.mysql import TIMESTAMP
 
 from models.base import Base, TimestampMixin, UnsignedInt
 # news.source_id 的 ForeignKey 指向 source 表：必须让 SQLAlchemy 的 metadata
@@ -16,6 +17,7 @@ class Category(Base, TimestampMixin):
     # 约束没有名字，和库里的索引名对不上）
     __table_args__ = (
         UniqueConstraint("name", name="name_UNIQUE"),
+        {"comment": "新闻分类表"},
     )
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="分类ID")
     name: Mapped[str] = mapped_column(String(50), nullable=False, comment="分类名称")
@@ -43,12 +45,13 @@ class News(Base, TimestampMixin):
         # 历史种子数据这一列是 NULL，不会产生通知。
         Index("fk_news_user_idx", "user_id"),
         Index("idx_news_source", "source_id"),
+        {"comment": "新闻表"},
     )
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="新闻ID")
     title: Mapped[str] = mapped_column(String(255), nullable=False, comment="新闻标题")
-    description: Mapped[Optional[str]] = mapped_column(String(500), comment="新闻描述")
+    description: Mapped[Optional[str]] = mapped_column(String(500), comment="新闻简介")
     content: Mapped[str] = mapped_column(Text, nullable=False, comment="新闻内容")
-    image: Mapped[Optional[str]] = mapped_column(String(255), comment="新闻图片")
+    image: Mapped[Optional[str]] = mapped_column(String(255), comment="封面图片URL")
     author: Mapped[Optional[str]] = mapped_column(String(50), comment="作者")
     # 报纸来源：作者是一篇的署名，报纸是一批新闻的出处；关注报纸能看到关注流
     source_id: Mapped[Optional[int]] = mapped_column(
@@ -58,8 +61,8 @@ class News(Base, TimestampMixin):
     user_id: Mapped[Optional[int]] = mapped_column(
         UnsignedInt, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, comment="发布者ID"
     )
-    views: Mapped[int] = mapped_column(UnsignedInt, default=0, nullable=False, comment="浏览次数")
-    publish_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="发布时间")
+    views: Mapped[int] = mapped_column(UnsignedInt, default=0, nullable=False, comment="浏览量")
+    publish_time: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.now, comment="发布时间")
 
     def __repr__(self):
         return f"<News(id={self.id}, title={self.title}, views={self.views})>"

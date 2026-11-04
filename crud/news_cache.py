@@ -17,6 +17,7 @@ from cache.news_cache import (
     invalidate_news_list,
 )
 from crud.news_views import apply_view_deltas
+from crud import tag as tag_crud
 from models.news import Category, News
 from schemas.base import NewsItemBase
 from utils.logger import get_logger
@@ -24,6 +25,9 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 DETAIL_LOCK_PREFIX = "lock:news:detail:"
+# 详情页的「标签 + 相关推荐」单独一个 key：只有详情接口需要它，
+# 点赞/评论那条路径不该为它多查两次库。
+EXTRAS_CACHE_PREFIX = "news:extras:"
 DETAIL_TTL_BASE = 120
 DETAIL_TTL_JITTER = 60      # 抖动范围，避免同批 key 同时过期（雪崩）
 NULL_TTL = 30               # 空值缓存，防穿透
@@ -178,9 +182,14 @@ async def get_news_detail(db: AsyncSession, news_id: int):
 
 
 async def invalidate_news_detail(news_id: int) -> None:
-    """后台改/删新闻后调用，否则详情最多 3 分钟仍是旧的。"""
+    """后台改/删新闻后调用，否则详情最多 3 分钟仍是旧的。
+
+    标签和「相关推荐」跟着详情一起失效：改标题、改分类、换标签都会影响它们。
+    """
     try:
-        await redis_client.delete(f"{DETAIL_CACHE_PREFIX}{news_id}")
+        await redis_client.delete(
+            f"{DETAIL_CACHE_PREFIX}{news_id}", f"{EXTRAS_CACHE_PREFIX}{news_id}"
+        )
     except Exception as e:
         logger.warning("清理详情缓存失败（news_id=%s）：%s", news_id, e)
 
@@ -205,7 +214,12 @@ async def increase_news_views(db: AsyncSession, news_id: int, current_views: int
     return current_views + 1
 
 
-async def get_related_news(db: AsyncSession, news_id: int, category_id: int, limit: int = 5):
+async def _fetch_related_rows(db: AsyncSession, news_id: int, category_id: int,
+                              limit: int = 5) -> list[dict]:
+    """查库拿相关推荐，`views` 是**库内原值**（不在这一层叠加 Redis 增量）。
+
+    缓存里存的必须是原值：存叠加后的值，命中缓存时会把同一份增量再加一遍。
+    """
     stmt = select(News).where(
         News.category_id == category_id,
         News.id != news_id,
@@ -214,22 +228,63 @@ async def get_related_news(db: AsyncSession, news_id: int, category_id: int, lim
         News.publish_time.desc()
     ).limit(limit)
     result = await db.execute(stmt)
-    related_news = result.scalars().all()
-    rows = [{
+    return [{
         "id": news.id,
         "title": news.title,
         "content": news.content,
         "image": news.image,
         "author": news.author,
-        "publishTime": news.publish_time,
+        # 必须转成字符串再进缓存：json.dumps 不认 datetime，
+        # 写缓存会静默失败（只留一条 warning），缓存等于没生效。
+        "publishTime": news.publish_time.isoformat() if news.publish_time else None,
         "categoryId": news.category_id,
         "views": news.views
-    } for news in related_news]
+    } for news in result.scalars().all()]
 
-    # 相关推荐是直接查库的，要比对一下还没回写的阅读量增量，否则会比列表页小
+
+async def _apply_related_view_deltas(rows: list[dict]) -> list[dict]:
+    """把还没回写的阅读量增量叠到相关推荐上（只改内存，不写回缓存）。
+
+    不叠加的话，详情页的相关推荐会比列表页的阅读量小 —— 之前踩过。
+    """
+    if not rows:
+        return rows
     deltas = await view_counter.get_deltas([row["id"] for row in rows])
     for row in rows:
         delta = deltas.get(row["id"])
         if delta:
             row["views"] += delta
     return rows
+
+
+async def get_detail_extras(db: AsyncSession, news_id: int, category_id: int) -> dict:
+    """详情页的「标签 + 相关推荐」，带独立缓存。
+
+    这两块内容变动很慢，却让每次详情请求各付一次查库。缓存后命中路径上
+    只剩「点赞」一次数据库往返（原来是 3 次），这是详情接口延迟的大头。
+
+    ⚠️ 相关推荐是按 `views` 降序排的，所以缓存会有最多一个 TTL 的滞后
+    （120~180s）。这是推荐位，不是正文，可以接受；要更快就调小 TTL。
+    """
+    key = f"{EXTRAS_CACHE_PREFIX}{news_id}"
+
+    cached = await get_json_cache(key)
+    if cached is not None:
+        # 深拷贝一份再叠加增量，别把缓存里那份共享 dict 改脏
+        cached = {"tags": cached.get("tags", []),
+                  "related": [dict(row) for row in cached.get("related", [])]}
+        cached["related"] = await _apply_related_view_deltas(cached["related"])
+        return cached
+
+    tag_rows = await tag_crud.list_news_tags(db, news_id)
+    payload = {
+        "tags": [{"id": tag.id, "name": tag.name} for tag in tag_rows],
+        "related": await _fetch_related_rows(db, news_id, category_id),
+    }
+    await set_cache(
+        key, payload, DETAIL_TTL_BASE + random.randint(0, DETAIL_TTL_JITTER)
+    )
+    return {
+        "tags": payload["tags"],
+        "related": await _apply_related_view_deltas([dict(row) for row in payload["related"]]),
+    }

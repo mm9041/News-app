@@ -67,6 +67,30 @@ def test_bearer_prefix_also_works(client, temp_user):
     assert resp.status_code == 200
 
 
+def test_login_sets_httponly_cookie_and_logout_clears_it(client, temp_user):
+    """浏览器通道：token 走 httpOnly cookie，登出要连库里的记录一起删。"""
+    client.cookies.clear()
+
+    resp = client.post(
+        "/api/user/login",
+        json={"username": temp_user["username"], "password": temp_user["password"]},
+    )
+    assert resp.status_code == 200
+
+    set_cookie = resp.headers.get("set-cookie", "").lower()
+    assert "access_token=" in set_cookie
+    assert "httponly" in set_cookie, "必须 httpOnly，否则 XSS 能直接读走"
+    assert "samesite=lax" in set_cookie
+
+    # 不带 Authorization 头，只靠 cookie
+    info = client.get("/api/user/info")
+    assert info.status_code == 200
+    assert info.json()["data"]["username"] == temp_user["username"]
+
+    assert client.post("/api/user/logout").status_code == 200
+    assert client.get("/api/user/info").status_code == 401, "登出后旧 cookie 必须失效"
+
+
 def test_invalid_token_is_rejected(client):
     resp = client.get("/api/user/info", headers={"Authorization": "not-a-real-token"})
     assert resp.status_code == 401

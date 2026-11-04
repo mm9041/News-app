@@ -1,12 +1,46 @@
+import os
 from typing import Optional
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Cookie, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from config.db_conf import get_database
 from crud import users
 from models.users import User
+
+# 浏览器走 httpOnly cookie，脚本 / curl 仍可用 Authorization 头。
+# 两条通道并存：前端不再把 token 写进 localStorage，
+# 但测试和第三方调用方照旧能带 header（不用为了 cookie 改一遍所有用例）。
+TOKEN_COOKIE_NAME = "access_token"
+TOKEN_TTL_SECONDS = 7 * 24 * 3600
+
+# 上 HTTPS 后把它置为 true（.env 里配 COOKIE_SECURE=true）；
+# 本地 http 下必须为 false，否则浏览器直接不保存 cookie。
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def set_token_cookie(response, token: str) -> None:
+    """把 token 写进 httpOnly cookie。
+
+    - httponly：JS 读不到，XSS 也就偷不走（这是本次改造的全部意义）
+    - samesite=lax：跨站 POST 不带 cookie，挡掉大部分 CSRF；
+      同站不同端口（5173 -> 8000）仍会带上
+    - secure：见上面的 COOKIE_SECURE
+    """
+    response.set_cookie(
+        key=TOKEN_COOKIE_NAME,
+        value=token,
+        max_age=TOKEN_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=COOKIE_SECURE,
+        path="/",
+    )
+
+
+def clear_token_cookie(response) -> None:
+    response.delete_cookie(TOKEN_COOKIE_NAME, path="/")
 
 
 def _extract_token(authorization: Optional[str]) -> Optional[str]:
@@ -23,13 +57,19 @@ def _extract_token(authorization: Optional[str]) -> Optional[str]:
     return token or None
 
 
+def token_from_request(authorization: Optional[str], access_token: Optional[str]) -> Optional[str]:
+    """按「header 优先、cookie 兜底」的顺序取 token。"""
+    return _extract_token(authorization) or _extract_token(access_token)
+
+
 async def get_current_user(
         authorization: Optional[str] = Header(None, alias="Authorization"),
+        access_token: Optional[str] = Cookie(None, alias=TOKEN_COOKIE_NAME),
         db: AsyncSession = Depends(get_database)
 ):
-    """从 Authorization 头取出 token 并查出对应的用户。
+    """从 Authorization 头或 httpOnly cookie 取出 token 并查出用户。
 
-    这个头声明成**可选**（Header(None)）是有意为之：如果写成 Header(...)，
+    头声明成**可选**（Header(None)）是有意为之：如果写成 Header(...)，
     FastAPI 会在进入函数之前就用它自己的校验把请求拦下，返回
 
         422 {"detail":[{"type":"missing","loc":["header","Authorization"],...}]}
@@ -37,7 +77,7 @@ async def get_current_user(
     既不符合项目统一的 {code, message, data}，前端也读不到 message。
     所以改成在函数里自己判断，统一抛 401。
     """
-    token = _extract_token(authorization)
+    token = token_from_request(authorization, access_token)
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -62,13 +102,14 @@ async def get_current_user(
 
 async def get_optional_user(
         authorization: Optional[str] = Header(None, alias="Authorization"),
+        access_token: Optional[str] = Cookie(None, alias=TOKEN_COOKIE_NAME),
         db: AsyncSession = Depends(get_database)
 ) -> Optional[User]:
-    """可选登录：没带头、或 token 失效时都返回 None，不抛 401。
+    """可选登录：没带凭证、或 token 失效时都返回 None，不抛 401。
 
     评论列表这类「游客能看、登录后才决定能不能删」的接口用它。
     """
-    token = _extract_token(authorization)
+    token = token_from_request(authorization, access_token)
     if not token:
         return None
     user = await users.get_user_by_token(db, token)

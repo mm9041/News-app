@@ -94,7 +94,9 @@ app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins(),
-    allow_credentials=False,  # 用 Authorization 头，不依赖 cookie
+    # 登录 token 走 httpOnly cookie，跨域请求需要带上凭证。
+    # allow_origins 必须是显式白名单（上面已经收紧），不能用 "*"。
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     # 必须显式暴露自定义响应头，否则跨域时 fetch 读不到它：

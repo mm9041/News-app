@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String
+from sqlalchemy import Boolean, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.mysql import TIMESTAMP
 
 from models.base import Base, UnsignedInt
 
@@ -23,6 +24,7 @@ class Notification(Base):
         Index("idx_notification_user", "user_id", "is_read", "created_at", "id"),
         Index("fk_notification_actor_idx", "actor_id"),
         Index("fk_notification_news_idx", "news_id"),
+        {"comment": "消息通知表"},
     )
 
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="通知ID")
@@ -34,7 +36,7 @@ class Notification(Base):
         UnsignedInt, ForeignKey("news_comment.id", ondelete="SET NULL"), nullable=True, comment="相关评论ID"
     )
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否已读")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.now, nullable=False, comment="创建时间")
 
     def __repr__(self):
         return f"<Notification(id={self.id}, user_id={self.user_id}, type={self.type})>"

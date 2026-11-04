@@ -2,7 +2,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import pinia from './store'
-import { bindTokenGetter, bindUnauthorizedHandler } from './api/http'
+import { bindUnauthorizedHandler } from './api/http'
 import { useThemeStore } from './store/theme'
 import { setupGuard } from './router/guard'
 import { useUserStore } from './store/user'
@@ -74,11 +74,9 @@ app.use(Search)
 app.use(router)
 app.use(pinia)
 
-// 请求层需要 token，但不能在 api/http.js 里 import store（会循环依赖），
-// 所以在 pinia 安装完成后注入取值函数
-bindTokenGetter(() => useUserStore().token)
-// 401 时统一清掉登录态（跳转与提示在拦截器里做）
-bindUnauthorizedHandler(() => useUserStore().logout())
+// token 存在 httpOnly cookie 里（JS 读不到），所以请求层不需要注入 token；
+// 401 时统一清本地登录态（跳转与提示在拦截器里做）
+bindUnauthorizedHandler(() => useUserStore().clearSession())
 
 // 管理员路由守卫（必须在 pinia 安装之后注册）
 setupGuard(router)
@@ -98,4 +96,8 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 
 app.mount('#app')
+
+// 启动时恢复会话：token 在 httpOnly cookie 里读不到，只能问一次后端。
+// 放在 mount 之后，不阻塞首屏；游客会拿到 401，静默处理。
+useUserStore().restoreSession()
 

@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Index, Text
+from sqlalchemy import ForeignKey, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.mysql import TIMESTAMP
 
 from models.base import Base, UnsignedInt
 
@@ -27,6 +28,7 @@ class AiChat(Base):
         # 历史分页按「用户 + 时间倒序 + id 倒序」；方向见 database.sql
         Index("idx_user_created", "user_id", "created_at", "id"),
         Index("fk_ai_chat_conv_idx", "conversation_id"),
+        {"comment": "AI聊天记录表"},
     )
 
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="聊天记录ID")
@@ -36,7 +38,7 @@ class AiChat(Base):
     )
     message: Mapped[str] = mapped_column(Text, nullable=False, comment="用户消息")
     response: Mapped[str] = mapped_column(Text, nullable=False, comment="AI回复")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.now, nullable=False, comment="创建时间")
 
     def __repr__(self):
         return f"<AiChat(id={self.id}, user_id={self.user_id}, conversation_id={self.conversation_id})>"

@@ -158,6 +158,12 @@ def test_hot_tags_contains_new_tag(client, news_with_tags):
 
 def test_update_news_replaces_tags(client, news_with_tags):
     news_id = news_with_tags["id"]
+
+    # 先读一次详情，把「标签 + 相关推荐」写进缓存；
+    # 后台改完必须让这份缓存一起失效，否则前台最多 3 分钟看不到新标签。
+    before = client.get("/api/news/detail", params={"id": news_id}).json()["data"]
+    assert {t["name"] for t in before["tags"]} == {"pytest标签", "AI"}
+
     resp = client.put(
         f"/api/admin/news/{news_id}",
         json={

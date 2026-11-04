@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.mysql import TIMESTAMP
 
 from models.base import Base, UnsignedInt
 
@@ -20,12 +21,13 @@ class NewsLike(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "news_id", name="user_news_like_unique"),
         Index("idx_news_like_news", "news_id"),
+        {"comment": "新闻点赞表"},
     )
 
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="点赞ID")
     news_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("news.id"), nullable=False, comment="新闻ID")
     user_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("user.id"), nullable=False, comment="用户ID")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False, comment="点赞时间")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.now, nullable=False, comment="点赞时间")
 
     def __repr__(self):
         return f"<NewsLike(news_id={self.news_id}, user_id={self.user_id})>"

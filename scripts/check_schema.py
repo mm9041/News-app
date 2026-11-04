@@ -41,6 +41,8 @@ def main() -> int:
     engine = create_engine(build_url())
     insp = inspect(engine)
     db_tables = set(insp.get_table_names())
+    # alembic_version 是 Alembic 自己的记账表，不属于业务模型
+    db_tables.discard("alembic_version")
     orm_tables = {table.name: table for table in Base.metadata.sorted_tables}
 
     problems: list[str] = []

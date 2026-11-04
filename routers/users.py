@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Optional
+
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request
 from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +16,13 @@ from schemas.users import (
     UserUpdateRequest,
     UserChangePasswordRequest,
 )
-from utils.auth import get_current_user
+from utils.auth import (
+    TOKEN_COOKIE_NAME,
+    clear_token_cookie,
+    get_current_user,
+    set_token_cookie,
+    token_from_request,
+)
 from utils.rate_limit import client_ip, enforce
 from utils.response import success_response
 
@@ -30,7 +38,10 @@ async def register(user_data: UserRegisterRequest, request: Request, db: AsyncSe
     user = await create_user(db, user_data)
     token = await create_token(db, user.id)
     response_data = UserAuthResponse(token=token, userInfo=UserInfoResponse.model_validate(user))
-    return success_response(data=response_data, message="注册成功")
+    response = success_response(data=response_data, message="注册成功")
+    # 同时下发 httpOnly cookie：浏览器后续请求自动带上，前端不用碰 token
+    set_token_cookie(response, token)
+    return response
 
 
 @router.post("/login")
@@ -45,7 +56,28 @@ async def login(user_data: UserRequest, request: Request, db: AsyncSession = Dep
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已被禁用，请联系管理员")
     token = await create_token(db, user.id)
     response_data = UserAuthResponse(token=token, userInfo=UserInfoResponse.model_validate(user))
-    return success_response(data=response_data, message="登录成功")
+    response = success_response(data=response_data, message="登录成功")
+    set_token_cookie(response, token)
+    return response
+
+
+@router.post("/logout")
+async def logout(
+        authorization: Optional[str] = Header(None, alias="Authorization"),
+        access_token: Optional[str] = Cookie(None, alias=TOKEN_COOKIE_NAME),
+        db: AsyncSession = Depends(get_database),
+):
+    """退出登录：删掉库里的 token 行 + 清 cookie。
+
+    刻意**不要求**已登录：带着过期/无效凭证来退出也应该成功返回，
+    否则前端会卡在 401 里、清不干净本地状态。
+    """
+    token = token_from_request(authorization, access_token)
+    if token:
+        await users.delete_token(db, token)
+    response = success_response(message="已退出登录")
+    clear_token_cookie(response)
+    return response
 
 
 @router.get("/info")

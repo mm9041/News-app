@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.comment import NewsComment
@@ -82,6 +82,16 @@ async def get_user_by_token(db: AsyncSession, token: str):
     query = select(User).where(User.id == db_token.user_id)
     result = await db.execute(query)
     return result.scalar_one_or_none()
+
+
+async def delete_token(db: AsyncSession, token: str) -> bool:
+    """退出登录：把这条 token 从库里删掉（同样先哈希再匹配）。
+
+    只清 cookie 不删库记录的话，那串 token 还能用满 7 天 —— 退出登录就不算数。
+    """
+    result = await db.execute(delete(UserToken).where(UserToken.token == hash_token(token)))
+    await db.commit()
+    return result.rowcount > 0
 
 
 async def update_user(db: AsyncSession, username: str, user_data: UserUpdateRequest):

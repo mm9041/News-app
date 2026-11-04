@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.mysql import TIMESTAMP
 
 from models.base import Base, UnsignedInt
 
@@ -12,11 +13,12 @@ class Tag(Base):
 
     __table_args__ = (
         UniqueConstraint("name", name="name_UNIQUE"),
+        {"comment": "标签表"},
     )
 
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="标签ID")
     name: Mapped[str] = mapped_column(String(30), nullable=False, comment="标签名")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.now, nullable=False, comment="创建时间")
 
     def __repr__(self):
         return f"<Tag(id={self.id}, name={self.name})>"
@@ -33,6 +35,7 @@ class NewsTag(Base):
     __table_args__ = (
         UniqueConstraint("news_id", "tag_id", name="news_tag_unique"),
         Index("fk_news_tag_tag_idx", "tag_id"),
+        {"comment": "新闻标签关联表"},
     )
 
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="关联ID")

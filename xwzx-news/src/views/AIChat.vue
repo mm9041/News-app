@@ -203,7 +203,7 @@ const removeConversation = async (conv) => {
 // 进页面：拉到会话列表后自动打开最近一次对话，没有就停在欢迎语
 const initConversation = async () => {
   if (historyLoaded.value) return;
-  if (!isLogin.value || !userStore.token) return;
+  if (!isLogin.value || !userStore.isLogin) return;
   historyLoaded.value = true;
 
   try {
@@ -222,7 +222,7 @@ const sendMessage = async () => {
   if (!userInput.value.trim() || isLoading.value) return;
 
   // 登录校验必须放在最前面：否则被拦下后会在消息列表里留下一条孤立的提问
-  if (!isLogin.value || !userStore.token) {
+  if (!isLogin.value || !userStore.isLogin) {
     showToast('请先登录后再使用 AI 问答');
     router.push('/login');
     return;
@@ -282,10 +282,10 @@ const fetchAIResponse = async (userMessage) => {
   try {
     const response = await fetch(chatEndpoint, {
       method: 'POST',
+      // token 在 httpOnly cookie 里：带上凭证即可，前端拿不到也不需要它
+      credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
-        // 后端要校验登录：裸 token 放 Authorization 头即可（auth.py 会自己剥掉 Bearer 前缀）
-        Authorization: userStore.token
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         messages: allMessages,

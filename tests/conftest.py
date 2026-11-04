@@ -29,6 +29,21 @@ def client():
         yield test_client
 
 
+@pytest.fixture(autouse=True)
+def _isolate_cookies(client):
+    """每个用例前后清空 cookie jar。
+
+    注册 / 登录接口现在会下发 httpOnly cookie，而 client 是 session 级的：
+    不清的话，上一个用例注册出来的登录态会漏到下一个用例，
+    "游客"其实带着有效 cookie（表现为 test_guest_can_read_but_not_delete 失败）。
+
+    用例之间统一用 Authorization 头鉴权；cookie 只在 test_auth 里专门验证。
+    """
+    client.cookies.clear()
+    yield
+    client.cookies.clear()
+
+
 def db_conn():
     return pymysql.connect(
         host=os.getenv("DB_HOST", "127.0.0.1"),
@@ -74,6 +89,8 @@ def temp_user(client):
     assert resp.status_code == 200, resp.text
     data = resp.json()["data"]
 
+    # 注册/登录会下发 cookie；夹具建好用户后清掉，避免把登录态漏给"游客"用例
+    client.cookies.clear()
     yield {"username": username, "password": password, "token": data["token"], "user_id": data["userInfo"]["id"]}
 
     with db_conn() as conn:
@@ -92,6 +109,8 @@ def other_user(client):
     assert resp.status_code == 200, resp.text
     data = resp.json()["data"]
 
+    # 注册/登录会下发 cookie；夹具建好用户后清掉，避免把登录态漏给"游客"用例
+    client.cookies.clear()
     yield {"username": username, "password": password, "token": data["token"], "user_id": data["userInfo"]["id"]}
 
     with db_conn() as conn:
@@ -133,6 +152,8 @@ def admin_user(client, db):
     data = resp.json()["data"]
     assert data["userInfo"]["isAdmin"] is True
 
+    # 注册/登录会下发 cookie；夹具建好用户后清掉，避免把登录态漏给"游客"用例
+    client.cookies.clear()
     yield {
         "username": username,
         "password": password,

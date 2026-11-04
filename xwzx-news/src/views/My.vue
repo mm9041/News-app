@@ -180,7 +180,7 @@ const handleLogout = () => {
 
 // 拉取最新资料。未登录时不必发这个请求。
 const loadUserInfo = async () => {
-  if (!userStore.getLoginStatus || !userStore.token) return;
+  if (!userStore.getLoginStatus || !userStore.isLogin) return;
   try {
     await userStore.getUserInfoDetail();
   } catch (error) {

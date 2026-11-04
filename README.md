@@ -142,7 +142,8 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | DELETE | `/api/admin/news/{id}` | 管理员 | 删除 |
 | GET | `/api/admin/stats?days&top` | 管理员 | 看板：总览 / 趋势 / 分类 / 热门 |
 
-鉴权头：`Authorization: <token>`，带不带 `Bearer ` 前缀都行。
+鉴权：浏览器走 **httpOnly cookie**（登录/注册时下发 `access_token`，JS 读不到，XSS 偷不走）；
+脚本 / curl 仍可用 `Authorization: <token>`（带不带 `Bearer ` 前缀都行）。两条通道都支持。
 
 ## 管理后台
 
@@ -171,6 +172,9 @@ python scripts/make_admin.py <用户名>
   过期瞬间用 Redis 互斥锁只放一个请求回源（防击穿）、TTL 加抖动避免同批失效（防雪崩）。
   后台改/删新闻会主动清详情缓存。
 - **认证**：`user_token` 只存 `sha256(token)`，明文只在登录/注册响应里返回一次；7 天有效；每用户一条，重新登录会顶掉旧 token（多端互踢）。
+  浏览器端 token 放在 **httpOnly + SameSite=Lax** 的 cookie 里（`access_token`），前端不再写 localStorage，
+  启动时靠 `GET /api/user/info` 探活恢复登录态；`POST /api/user/logout` 会删库里的 token 行并清 cookie。
+  开发态前端必须走 Vite 的 `server.proxy`（见 `vite.config.js`）保持同源，否则跨站请求不会带 Lax cookie。
 - **限流**：基于 Redis 的滑动窗口（ZSET + Lua，判断与写入在同一段脚本里），Redis 故障时放行（保护措施不能把业务拦死）。
 - **健康检查**：`GET /health` 把 MySQL 当硬依赖（挂了返回 503），Redis 当可选的加速层（挂了只标 `degraded`、仍返回 200，否则负载均衡会把功能完全正常的实例摘掉）；需要「Redis 也必须活」的探针用 `GET /health?strict=true`。
 - **前端请求**：统一走 `src/api/http.js`，token 由 `main.js` 注入，401 全局清登录态并跳登录页。
@@ -250,6 +254,25 @@ python scripts/loadtest.py --path "/api/news/detail?id=45" --concurrency 20 --du
 
 结论：瓶颈不在缓存命中率，而在**单次请求的数据库往返次数**——
 详情接口一次要查点赞数、相关推荐、标签，三次往返把延迟拉到 130ms 以上。
+
+## 表结构变更（Alembic）
+
+新装库仍然是 `mysql < database.sql` 一次建好 15 张表和种子数据；Alembic 只记录**之后的增量**。
+
+```bash
+python -m alembic current                    # 当前版本
+python -m alembic stamp 0001                 # 已有库接入：标记到基线，不执行任何 DDL
+python -m alembic revision --autogenerate -m "说明"
+python -m alembic upgrade head
+python -m alembic check                      # 模型与库是否一致（可进 CI）
+```
+
+`0001` 是**空基线**（`upgrade()` 里只有 pass），因为建表这件事仍然归 `database.sql`。
+两处已知取舍写在 `migrations/env.py` 里：
+
+- **不比外键**：库里的外键是显式命名的（`fk_news_category`），模型里是匿名 `ForeignKey(...)`，
+  否则每轮 autogenerate 都会报一轮 remove+add 的空操作。改外键要手写迁移。
+- 索引方向、全文索引这类 DDL `autogenerate` 表达不出来，生成后**务必人工过一遍**。
 
 ## 已知限制
 

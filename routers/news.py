@@ -9,7 +9,6 @@ from crud import like as like_crud
 from crud import news_cache, news_search
 from crud import notification as notification_crud
 from crud import recommend as recommend_crud
-from crud import tag as tag_crud
 from models.like import NewsLike
 from models.news import News
 from models.tag import Tag
@@ -113,9 +112,9 @@ async def get_news_detail(
         likes = await like_crud.count_likes(db, news_id)
         is_liked = False
 
-    related_news = await news_cache.get_related_news(db, news_detail.id, news_detail.category_id)
-    tag_rows = await tag_crud.list_news_tags(db, news_detail.id)
-    tags = [{"id": t.id, "name": t.name} for t in tag_rows]
+    # 标签 + 相关推荐走独立缓存：命中时只剩上面这一次「点赞」查库，
+    # 而它们本身变动很慢，没必要每次详情都查库。
+    extras = await news_cache.get_detail_extras(db, news_detail.id, news_detail.category_id)
     return {
         "code": 200,
         "message": "获取新闻详情成功",
@@ -132,8 +131,8 @@ async def get_news_detail(
             "views": views,
             "likes": likes,
             "isLiked": is_liked,
-            "tags": tags,
-            "relatedNews": related_news
+            "tags": extras["tags"],
+            "relatedNews": extras["related"]
         }
     }
 

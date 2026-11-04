@@ -15,3 +15,5 @@ pydantic==2.13.5
 python-dotenv==1.2.3
 python-multipart==0.0.32
 bcrypt==5.0.0
+# 表结构版本管理。新装库仍走 database.sql，Alembic 只管增量（见 README）
+alembic==1.20.1

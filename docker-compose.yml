@@ -18,6 +18,8 @@
 services:
   mysql:
     image: mysql:8.0
+    # 宿主机重启 / 进程崩溃后自动拉起，不然得手动 compose up
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root123456}
       MYSQL_DATABASE: news_app
@@ -42,6 +44,7 @@ services:
 
   redis:
     image: redis:8-alpine
+    restart: unless-stopped
     ports:
       # 宿主机用 16379，避开本机（或已有容器）占用的 6379
       - "16379:6379"
@@ -53,6 +56,7 @@ services:
 
   backend:
     build: .
+    restart: unless-stopped
     environment:
       # 容器内用服务名，不能用 127.0.0.1
       DB_HOST: mysql
@@ -82,8 +86,11 @@ services:
 
   frontend:
     build: ./xwzx-news
+    restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        # 等后端健康检查通过再起前端，避免首屏 load 时 nginx 反代拿到 502
+        condition: service_healthy
     ports:
       - "8080:80"
 

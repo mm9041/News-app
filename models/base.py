@@ -1,7 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime
-from sqlalchemy.dialects.mysql import INTEGER
+from sqlalchemy.dialects.mysql import INTEGER, TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # database.sql 里所有主键/外键以及 news.views 都是 `INT UNSIGNED`。
@@ -34,12 +33,12 @@ class TimestampMixin:
     """
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        TIMESTAMP,
         default=datetime.now,
         comment="创建时间"
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        TIMESTAMP,
         default=datetime.now,
         onupdate=datetime.now,
         comment="更新时间"

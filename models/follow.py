@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.mysql import TIMESTAMP
 
 from models.base import Base, UnsignedInt
 
@@ -19,17 +20,20 @@ class Follow(Base):
         UniqueConstraint("user_id", "target_type", "target_id", "target_name", name="user_target_unique"),
         Index("idx_target", "target_type", "target_id"),
         Index("idx_follow_author", "target_type", "target_name"),
+        {"comment": "关注表"},
     )
 
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="关注ID")
     user_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("user.id"), nullable=False, comment="关注者ID")
     target_type: Mapped[str] = mapped_column(String(10), nullable=False, comment="类型：user / category")
-    target_id: Mapped[int] = mapped_column(UnsignedInt, nullable=False, comment="目标ID（user/category 用，author 时为 0）")
+    # target_id 只有 user/category 两类用；target_type=author 时置 0，
+    # 真正的关注对象是下一行的 target_name
+    target_id: Mapped[int] = mapped_column(UnsignedInt, nullable=False, comment="目标ID")
     # 作者是字符串（「海南日报」/「Dr. Chen」），target_type=author 时用这一列
     # NOT NULL DEFAULT ""（不是可选）：唯一索引必须包含这一列，
     # 而 MySQL 的唯一索引对 NULL 不去重，会让 user/category 的关注可以重复插入
-    target_name: Mapped[str] = mapped_column(String(50), nullable=False, default="", comment="作者名")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False, comment="关注时间")
+    target_name: Mapped[str] = mapped_column(String(50), nullable=False, default="", comment="作者名（target_type=author 时）")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.now, nullable=False, comment="关注时间")
 
     def __repr__(self):
         return f"<Follow(user_id={self.user_id}, target={self.target_type}:{self.target_id})>"
