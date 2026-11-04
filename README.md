@@ -74,7 +74,8 @@ uvicorn main:app --port 8000
 - 接口文档：<http://127.0.0.1:8000/docs>
 - 健康检查：`GET /health` —— MySQL 挂返回 503；Redis 挂只标 `degraded`、仍 200，
   需要「Redis 也必须活」的探针用 `GET /health?strict=true`
-- 指标：`GET /metrics`（Prometheus 文本格式，**未鉴权**，别直接暴露公网）
+- 指标：`GET /metrics`（Prometheus 文本格式）。默认只允许**本机直连**，
+  要从别的机器/容器抓就配 `METRICS_TOKEN`，请求带 `Authorization: Bearer <token>` 或 `?token=`
 
 ### 3. 启动前端
 
@@ -105,6 +106,8 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | `DB_*` | 见 `.env.example` | MySQL 连接；`DB_ECHO=true` 可打 SQL |
 | `CORS_ALLOW_ORIGINS` | 5173/5174 的 localhost 与 127.0.0.1 | 逗号分隔，**不要再用 `*`** |
 | `REDIS_CONNECT_TIMEOUT` / `REDIS_SOCKET_TIMEOUT` | 0.5 | 必须设小，Redis 挂了要快速降级 |
+| `COOKIE_SECURE` | false | 上 HTTPS 后置 true，否则 cookie 明文传输 |
+| `METRICS_TOKEN` | 空 | 空表示 `/metrics` 只允许本机直连；非空则要求 Bearer token |
 | `VIEW_FLUSH_INTERVAL` | 30 | 阅读量增量回写间隔（秒） |
 | `LOG_LEVEL` | INFO | 日志级别；每行都带 request_id |
 | `AI_CHAT_URL` / `AI_API_KEY` / `AI_MODEL` | — | OpenAI 兼容接口；Key 只在后端 |
@@ -163,7 +166,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | DELETE | `/api/admin/users/{user_id}` | 管理员 | 删除用户（级联清其数据） |
 
 不在 `/api` 前缀下的三个：`GET /`（占位，返回 Hello World）、`GET /health`（依赖探测）、
-`GET /metrics`（Prometheus 文本，未鉴权）。
+`GET /metrics`（Prometheus 文本，默认仅本机可访问）。
 
 鉴权：浏览器走 **httpOnly cookie**（登录/注册时下发 `access_token`，JS 读不到，XSS 偷不走）；
 脚本 / curl 仍可用 `Authorization: <token>`（带不带 `Bearer ` 前缀都行）。两条通道都支持。

@@ -14,6 +14,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+import anyio
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 
 from models.users import User
@@ -75,7 +76,10 @@ async def upload_image(
     target_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"{uuid.uuid4().hex}{ext}"
-    (target_dir / filename).write_bytes(data)
+    # 落盘放线程池：write_bytes 是同步阻塞调用，最大 5MB 的写盘会把事件循环卡住，
+    # 同时进来的其他请求（包括 SSE 流）都会被拖慢。anyio 是 starlette 自带的依赖，
+    # 不用额外装 aiofiles。
+    await anyio.to_thread.run_sync((target_dir / filename).write_bytes, data)
 
     # 返回完整 URL，和库里已有的图片字段（picsum 的完整 URL）保持一致，
     # 前端拿到直接塞进 <img> 即可。

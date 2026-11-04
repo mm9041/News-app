@@ -1,9 +1,10 @@
 import asyncio
 import os
+import secrets
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -157,9 +158,41 @@ async def health(strict: bool = Query(False, description="严格模式：Redis �
     )
 
 
+# /metrics 的访问控制：配了 token 就认 token；没配则只允许本机直连。
+METRICS_TOKEN = os.getenv("METRICS_TOKEN", "").strip()
+
+
+def _metrics_allowed(request: Request) -> bool:
+    """指标端点的访问控制。
+
+    1. 配了 `METRICS_TOKEN`：必须带 `Authorization: Bearer <token>` 或 `?token=`；
+    2. 没配：只允许**本机直连** —— client 是回环地址，且请求里没有 `X-Forwarded-For`。
+
+    为什么不按「内网网段」放行：容器里 uvicorn 开了 `--proxy-headers` 且
+    `--forwarded-allow-ips=*`，任何人都能伪造 `X-Forwarded-For: 127.0.0.1`
+    让 client 变成回环地址。所以只要出现转发头就一律不认，必须配 token。
+    """
+    if METRICS_TOKEN:
+        supplied = request.headers.get("authorization", "")
+        if supplied[:7].lower() == "bearer ":
+            supplied = supplied[7:].strip()
+        supplied = supplied or request.query_params.get("token", "")
+        return secrets.compare_digest(supplied, METRICS_TOKEN)
+
+    if request.headers.get("x-forwarded-for"):
+        return False
+    client_host = request.client.host if request.client else ""
+    return client_host in ("127.0.0.1", "::1", "localhost")
+
+
 @app.get("/metrics")
-async def metrics_endpoint():
-    """Prometheus 抓取端点（文本格式）。"""
+async def metrics_endpoint(request: Request):
+    """Prometheus 抓取端点（文本格式）。
+
+    默认只对本机开放；要让 Prometheus 从别的机器/容器抓，就在 .env 里配 METRICS_TOKEN。
+    """
+    if not _metrics_allowed(request):
+        raise HTTPException(status_code=403, detail="指标端点需要授权，请配置 METRICS_TOKEN")
     return Response(content=render_metrics(), media_type="text/plain; version=0.0.4; charset=utf-8")
 
 

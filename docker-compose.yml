@@ -69,6 +69,11 @@ services:
       # 前端走同一个 nginx，同源请求其实用不到 CORS；这里留白名单方便直连调试
       CORS_ALLOW_ORIGINS: http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://localhost:18000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # 上 HTTPS 时在 .env 里置 true；不传进来的话容器里永远是默认的 false
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # 留空 = /metrics 只对本机开放（容器视角），Prometheus 抓取要配 token
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      VIEW_FLUSH_INTERVAL: ${VIEW_FLUSH_INTERVAL:-30}
       AI_CHAT_URL: ${AI_CHAT_URL:-}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-qwen3.7-flash}
