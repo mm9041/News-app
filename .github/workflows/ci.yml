@@ -62,7 +62,8 @@ jobs:
         run: python scripts/check_schema.py
 
       - name: 跑测试
-        run: python -m pytest -q
+        # 不加 -q：pytest.ini 的 addopts 已经是 -q，叠加成 -qq 会把汇总行压掉
+        run: python -m pytest
 
   frontend:
     runs-on: ubuntu-latest

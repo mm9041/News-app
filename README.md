@@ -11,8 +11,8 @@
 | Web 框架 | FastAPI 0.141（async） |
 | ORM / 驱动 | SQLAlchemy 2.0 + aiomysql |
 | 数据库 | MySQL 8.0（utf8mb4） |
-| 缓存 | Redis（分类、列表、阅读量计数、限流） |
-| 认证 | 自建 token（`user_token` 表，库里存 sha256） |
+| 缓存 | Redis（分类、列表、详情、相关推荐、阅读量计数、限流） |
+| 认证 | 自建 token（`user_token` 存 sha256）；浏览器走 httpOnly cookie，脚本可走 `Authorization` |
 | 大模型 | httpx 转发 OpenAI 兼容接口，SSE 透传 |
 | 前端 | Vue 3 + Vite + Pinia + Vue Router + Vant 4 + vue-i18n |
 
@@ -20,34 +20,38 @@
 
 ```
 FastAPIProject/
-├── main.py                 # 应用入口、lifespan（阅读量回写任务）、CORS
-├── database.sql            # 建库建表 + 示例数据（表结构以它为准）
+├── main.py                 # 应用入口、中间件、lifespan（阅读量回写任务）、/health、/metrics
+├── database.sql            # 建库建表 + 示例数据（新装库以它为准）
+├── alembic.ini             # 表结构增量迁移（连接串运行时从 .env 读）
+├── migrations/             # Alembic 迁移脚本，0001 是空基线
 ├── requirements.txt
 ├── .env.example            # 配置模板
+├── config/                 # 数据库/Redis/AI 的配置读取（都走 .env）
 ├── models/                 # SQLAlchemy 2.0 模型
 ├── schemas/                # Pydantic 请求/响应模型（camelCase alias 在这里桥接）
 ├── crud/                   # 数据访问层
-│   ├── news_cache.py       # 列表/详情/相关推荐
+│   ├── news_cache.py       # 列表/详情/相关推荐（含 extras 缓存）
 │   ├── news_search.py      # 全文搜索（ngram + LIKE 兜底）
 │   ├── news_views.py       # 阅读量增量叠加与回写
 │   ├── recommend.py        # 个性化推荐
 │   ├── like.py             # 点赞
 │   ├── admin_news.py       # 后台新闻读写（含缓存失效）
 │   └── ...
-├── cache/                  # Redis 操作（分类、列表、阅读量计数）
-├── routers/                # 路由
-├── utils/                  # 认证、响应体、异常、限流、日志
-├── scripts/                # 运维脚本（schema 检查）
+├── cache/                  # Redis key 约定与读写（分类、列表、详情 extras、阅读量计数）
+├── routers/                # 路由（news / comment / tag / user / admin / ai ...）
+├── utils/                  # 认证、响应体、异常、限流、日志、指标、健康探测
+├── scripts/                # 运维脚本（schema 检查、压测、建管理员、AI 会话迁移）
+├── tests/                  # pytest（连真实库的集成测试）
 └── xwzx-news/              # 前端
     └── src/
-        ├── api/http.js     # 统一 axios 实例（token 注入、401 处理）
+        ├── api/http.js     # 统一 axios 实例（withCredentials、401 处理）
         ├── store/          # Pinia
         └── views/
 ```
 
 ## 快速开始
 
-前置：Python 3.12、MySQL 8.0、Redis 6.2+、Node 18+。
+前置：Python 3.12、MySQL 8.0、Redis 6.2+（compose 用 8-alpine、CI 用 7）、Node 18+。
 
 ### 1. 初始化数据库
 
@@ -68,7 +72,9 @@ uvicorn main:app --port 8000
 ```
 
 - 接口文档：<http://127.0.0.1:8000/docs>
-- 健康检查：`GET /`
+- 健康检查：`GET /health` —— MySQL 挂返回 503；Redis 挂只标 `degraded`、仍 200，
+  需要「Redis 也必须活」的探针用 `GET /health?strict=true`
+- 指标：`GET /metrics`（Prometheus 文本格式，**未鉴权**，别直接暴露公网）
 
 ### 3. 启动前端
 
@@ -78,13 +84,19 @@ npm install
 npm run dev                       # http://localhost:5173
 ```
 
-前端默认请求 `http://127.0.0.1:8000`，改端口时在 `xwzx-news/.env` 里写：
+前端默认走**相对路径** `/api`，由 Vite 的 `server.proxy` 反代到 `http://127.0.0.1:8000`
+（见 `xwzx-news/vite.config.js`）。这一步不是可选项：登录 token 在 httpOnly + SameSite=Lax
+的 cookie 里，换成绝对地址后浏览器会当成跨站请求，cookie 根本不会发送。
+
+后端换端口时改 `vite.config.js` 里的 `proxy.target` 即可。
+非要直连绝对地址的话，在 `xwzx-news/.env` 里设：
 
 ```
 VITE_API_BASE_URL=http://127.0.0.1:8001
 ```
 
-同时后端 `.env` 的 `CORS_ALLOW_ORIGINS` 要包含前端的实际地址。
+同时后端 `.env` 的 `CORS_ALLOW_ORIGINS` 要包含前端实际地址 —— 但跨站 cookie 仍然不生效，
+所以只在调试脚本类场景用。
 
 ## 配置项
 
@@ -108,39 +120,50 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | GET | `/api/news/categories` | 否 | 分类列表（缓存 2h） |
 | GET | `/api/news/list?categoryId&page&pageSize` | 否 | 列表，按发布时间倒序 |
 | GET | `/api/news/search?keyword&page&pageSize` | 否 | 全文搜索（标题/摘要/正文） |
+| GET | `/api/news/suggest?keyword` | 否 | 搜索联想（标题前缀，最多 10 条） |
 | GET | `/api/news/detail?id` | 否 | 详情 + 相关推荐 + 点赞状态，并把阅读量 +1 |
 | GET | `/api/news/recommend?limit` | 否 | 猜你喜欢；登录后按兴趣推荐，游客给热门 |
-| PUT | `/api/news/{id}/like` | 是 | 点赞（幂等） |
-| DELETE | `/api/news/{id}/like` | 是 | 取消点赞（幂等） |
+| PUT | `/api/news/{news_id}/like` | 是 | 点赞（幂等） |
+| DELETE | `/api/news/{news_id}/like` | 是 | 取消点赞（幂等） |
 | GET | `/api/comment/list?newsId&page&pageSize` | 否 | 一级评论分页，每条带出回复 |
 | POST | `/api/comment/add` | 是 | 发表评论 / 回复（传 `parentId`） |
-| DELETE | `/api/comment/{id}` | 是 | 删除评论（本人或管理员，级联删回复） |
+| DELETE | `/api/comment/{comment_id}` | 是 | 删除评论（本人或管理员，级联删回复） |
 | GET | `/api/tag/hot?limit` | 否 | 标签墙（按引用次数） |
-| GET | `/api/tag/{id}/news?page` | 否 | 某标签下的新闻 |
+| GET | `/api/tag/{tag_id}/news?page` | 否 | 某标签下的新闻 |
+| GET | `/api/source/{source_id}/news?page` | 否 | 某报纸来源下的新闻 |
+| GET/POST/DELETE | `/api/follow*` | 部分 | 关注作者：关注/取关/状态/我关注的作者（需登录）、作者新闻（公开） |
 | POST | `/api/upload/image` | 是 | 上传图片（≤5MB，JPG/PNG/GIF/WebP） |
 | GET | `/api/notification/list?page&pageSize` | 是 | 通知列表，附带未读数 |
 | GET | `/api/notification/unread-count` | 是 | 未读数 |
-| PUT | `/api/notification/{id}/read` | 是 | 单条标记已读 |
+| PUT | `/api/notification/{notification_id}/read` | 是 | 单条标记已读 |
 | PUT | `/api/notification/read-all` | 是 | 全部已读 |
 | POST | `/api/user/register` | 否 | 注册（限 5 次/分/IP） |
 | POST | `/api/user/login` | 否 | 登录（限 10 次/分/IP） |
 | GET | `/api/user/info` | 是 | 当前用户 |
 | PUT | `/api/user/update` | 是 | 改昵称/头像/简介 |
 | PUT | `/api/user/password` | 是 | 改密码（限 5 次/分） |
+| POST | `/api/user/logout` | 否 | 退出：删除库里的 token 行 + 清 cookie |
 | GET/POST/DELETE | `/api/favorite/*` | 是 | 收藏检查/增删/列表/清空 |
 | GET/POST/DELETE | `/api/history/*` | 是 | 历史增删/列表/清空 |
 | POST | `/api/ai/chat` | 是 | AI 对话（SSE），限 20 次/分 |
 | GET | `/api/ai/history?page&pageSize` | 是 | 聊天记录（倒序） |
 | POST | `/api/ai/conversations` | 是 | 新建会话 |
 | GET | `/api/ai/conversations?page` | 是 | 会话列表（只含有消息的） |
-| GET | `/api/ai/conversations/{id}` | 是 | 会话的消息流 |
-| DELETE | `/api/ai/conversations/{id}` | 是 | 删除会话（级联删消息） |
+| GET | `/api/ai/conversations/{conversation_id}` | 是 | 会话的消息流 |
+| DELETE | `/api/ai/conversations/{conversation_id}` | 是 | 删除会话（级联删消息） |
 | GET | `/api/admin/news?page&pageSize&keyword` | 管理员 | 后台新闻列表（**含正文**） |
-| GET | `/api/admin/news/{id}` | 管理员 | 单条详情（编辑回填用） |
+| GET | `/api/admin/news/{news_id}` | 管理员 | 单条详情（编辑回填用） |
 | POST | `/api/admin/news` | 管理员 | 新建新闻 |
-| PUT | `/api/admin/news/{id}` | 管理员 | 更新（PUT 语义，整份覆盖） |
-| DELETE | `/api/admin/news/{id}` | 管理员 | 删除 |
+| PUT | `/api/admin/news/{news_id}` | 管理员 | 更新（PUT 语义，整份覆盖） |
+| DELETE | `/api/admin/news/{news_id}` | 管理员 | 删除 |
 | GET | `/api/admin/stats?days&top` | 管理员 | 看板：总览 / 趋势 / 分类 / 热门 |
+| GET | `/api/admin/users?page&pageSize&keyword` | 管理员 | 用户列表（带评论数） |
+| PUT | `/api/admin/users/{user_id}/ban` | 管理员 | 禁用 / 解禁 |
+| PUT | `/api/admin/users/{user_id}/admin` | 管理员 | 设置 / 取消管理员 |
+| DELETE | `/api/admin/users/{user_id}` | 管理员 | 删除用户（级联清其数据） |
+
+不在 `/api` 前缀下的三个：`GET /`（占位，返回 Hello World）、`GET /health`（依赖探测）、
+`GET /metrics`（Prometheus 文本，未鉴权）。
 
 鉴权：浏览器走 **httpOnly cookie**（登录/注册时下发 `access_token`，JS 读不到，XSS 偷不走）；
 脚本 / curl 仍可用 `Authorization: <token>`（带不带 `Bearer ` 前缀都行）。两条通道都支持。
@@ -170,14 +193,16 @@ python scripts/make_admin.py <用户名>
 - **缓存**：分类 2h、列表 30min、**详情 2~3 分钟（TTL 带随机抖动）**，读时回填。
   详情缓存顺带处理了三件事：查不到的 id 写 30 秒空值缓存（防穿透）、
   过期瞬间用 Redis 互斥锁只放一个请求回源（防击穿）、TTL 加抖动避免同批失效（防雪崩）。
-  后台改/删新闻会主动清详情缓存。
+  详情页的**标签与相关推荐**单独缓存（`news:extras:{id}`，同 TTL），命中后详情只剩一次点赞查库；
+  后台改/删新闻会同时清掉这两个 key。
 - **认证**：`user_token` 只存 `sha256(token)`，明文只在登录/注册响应里返回一次；7 天有效；每用户一条，重新登录会顶掉旧 token（多端互踢）。
   浏览器端 token 放在 **httpOnly + SameSite=Lax** 的 cookie 里（`access_token`），前端不再写 localStorage，
   启动时靠 `GET /api/user/info` 探活恢复登录态；`POST /api/user/logout` 会删库里的 token 行并清 cookie。
   开发态前端必须走 Vite 的 `server.proxy`（见 `vite.config.js`）保持同源，否则跨站请求不会带 Lax cookie。
 - **限流**：基于 Redis 的滑动窗口（ZSET + Lua，判断与写入在同一段脚本里），Redis 故障时放行（保护措施不能把业务拦死）。
 - **健康检查**：`GET /health` 把 MySQL 当硬依赖（挂了返回 503），Redis 当可选的加速层（挂了只标 `degraded`、仍返回 200，否则负载均衡会把功能完全正常的实例摘掉）；需要「Redis 也必须活」的探针用 `GET /health?strict=true`。
-- **前端请求**：统一走 `src/api/http.js`，token 由 `main.js` 注入，401 全局清登录态并跳登录页。
+- **前端请求**：统一走 `src/api/http.js`，只配 `withCredentials`，不再往 header 里塞 token；
+  401 时全局清登录态并跳登录页（启动时的会话探活带 `skipAuthRedirect`，游客不会被弹窗）。
 - **搜索**：`news` 表上建了 ngram 全文索引，查询用 `BOOLEAN MODE` 的短语匹配。
   单字关键词（`ngram_token_size=2` 切不出来）和英文短词（实测 `NASA` 的 MATCH 得分是 0）
   会回退到 LIKE，原因写在 `crud/news_search.py` 顶部注释里。
@@ -220,14 +245,19 @@ docker compose up -d --build
 - 首次启动会自动执行 `database.sql`，建表并灌入示例新闻
 - 数据库和上传的图片都在 named volume 里，`docker compose down` 不丢数据，加 `-v` 才会删
 - 前端构建时把 `VITE_API_BASE_URL` 设成空串，请求走 nginx 反代到后端，因此**不经过 CORS**
+- 后端以非 root（UID 10001）运行，镜像自带 `HEALTHCHECK`（探 `/health`）；
+  compose 里前端要等后端 `service_healthy` 才启动
 - 要接真实的大模型，先在项目根 `.env` 里配好 `AI_CHAT_URL` / `AI_API_KEY`，compose 会读
 
 ## 测试
 
 ```bash
 python -m pip install -r requirements-dev.txt
-python -m pytest -q
+python -m pytest
 ```
+
+> `pytest.ini` 里已经有 `addopts = -q`，命令行**别再传 `-q`** —— 叠成 `-qq` 会把
+> 「N passed」汇总行一起压掉，只剩失败列表。
 
 测试会连本地 MySQL（读为主），写操作只创建临时用户并在用例内清理。
 
@@ -244,16 +274,20 @@ python -m pytest -q
 python scripts/loadtest.py --path "/api/news/detail?id=45" --concurrency 20 --duration 8
 ```
 
-在 20 并发、本机 MySQL 的条件下实测：
+在 20 并发、本机 MySQL、压测客户端与服务端**同机**的条件下实测
+（2026-11-04，`scripts/loadtest.py`，每个接口跑 8 秒）：
 
 | 接口 | QPS | P50 | P95 |
 |---|---|---|---|
-| 详情（缓存 + 3 次查询） | 144 | 134 ms | 171 ms |
-| 列表（缓存 + 分页） | 145 | 73 ms | 486 ms |
-| 搜索（FULLTEXT 单查询） | 223 | 41 ms | 61 ms |
+| 详情（缓存 + 1 次查库） | 175 | 110 ms | 141 ms |
+| 列表（缓存 + 分页） | 177 | 111 ms | 136 ms |
+| 搜索（FULLTEXT 单查询） | 169 | 112 ms | 151 ms |
 
-结论：瓶颈不在缓存命中率，而在**单次请求的数据库往返次数**——
-详情接口一次要查点赞数、相关推荐、标签，三次往返把延迟拉到 130ms 以上。
+三个接口的 QPS 都落在 170~180，说明 20 并发下的瓶颈已经**不是某条 SQL**，
+而是单进程（Python 序列化 + 事件循环）本身 —— 客户端和服务端还抢同一个 CPU。
+
+改造前详情要查点赞、相关推荐、标签三次，P50 明显高于列表；把后两者并入缓存后
+（只剩一次点赞查库）已经和列表持平。数值仅供同机横向对比，别当容量规划依据。
 
 ## 表结构变更（Alembic）
 
@@ -276,7 +310,8 @@ python -m alembic check                      # 模型与库是否一致（可进
 
 ## 已知限制
 
-- **表结构无版本管理**：以 `database.sql` 为准，没有 Alembic；改表后跑 `python scripts/check_schema.py` 检查 ORM 与库是否漂移。
 - **回写任务是单进程假设**：`main.py` 里的后台任务在多 worker 部署时会重复扫同一批增量，需要加分布式锁。
-- **限流按 IP**：直接读 `request.client.host`，放在反向代理后面会变成所有用户共享一个桶，需要解析 `X-Forwarded-For`。
-- **前端分页号取自 `newsList.length`**：只支持顺序加载，不适合跳页。
+- **限流按 IP**：本地直连时读 `request.client.host`；容器里 uvicorn 开了 `--proxy-headers`，
+  反代后能拿到真实 IP，但 `--forwarded-allow-ips=*` 信任所有来源，**后端不能直接暴露公网**。
+- **前端分页号取自 `newsList.length`**：`store/modules/news.js` 用
+  `Math.ceil(length / 10) + 1` 算下一页，一旦有重复条目就会算错页；只支持顺序加载，不适合跳页。
