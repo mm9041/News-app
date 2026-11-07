@@ -1,23 +1,43 @@
 <template>
-  <div class="news-item" @click="goToDetail">
+  <article
+    class="news-item"
+    role="link"
+    tabindex="0"
+    :aria-label="`阅读：${news.title}`"
+    @click="goToDetail"
+    @keydown.enter.prevent="goToDetail"
+    @keydown.space.prevent="goToDetail"
+  >
     <div class="news-content">
-      <h3 class="news-title" v-html="highlightedTitle"></h3>
-      <p class="news-desc">{{ news.description }}</p>
+      <h3 class="news-title">
+        <template v-for="(part, index) in titleParts" :key="index">
+          <mark v-if="part.highlight">{{ part.text }}</mark>
+          <template v-else>{{ part.text }}</template>
+        </template>
+      </h3>
+      <p v-if="news.description" class="news-desc">{{ news.description }}</p>
       <div class="news-info">
         <span>{{ news.author }}</span>
         <span>{{ news.publishTime }}</span>
         <span>{{ news.views }} 阅读</span>
       </div>
     </div>
-    <div class="news-image">
-      <img :src="news.image" :alt="news.title" @error="onImageError">
+    <div v-if="news.image" class="news-image">
+      <img
+        :src="news.image"
+        :alt="news.title"
+        width="110"
+        height="80"
+        loading="lazy"
+        decoding="async"
+        @error="onImageError"
+      >
     </div>
-  </div>
+  </article>
 </template>
 
 <script setup>
-import { computed, defineProps } from 'vue'
-import DOMPurify from 'dompurify'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { onImageError } from '../config/image'
 
@@ -32,14 +52,17 @@ const props = defineProps({
   }
 })
 
-const highlightedTitle = computed(() => {
+// 直接渲染文本节点而不是 v-html：标题即使来自外部内容也不会被解析成 HTML。
+const titleParts = computed(() => {
   const title = props.news.title || ''
-  const kw = (props.keyword || '').trim()
-  if (!kw) return title
+  const keyword = (props.keyword || '').trim()
+  if (!keyword) return [{ text: title, highlight: false }]
 
-  const escaped = title.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`)
-  const pattern = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return escaped.replace(new RegExp(pattern, 'gi'), match => `<mark>${match}</mark>`)
+  const pattern = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return title
+    .split(new RegExp(`(${pattern})`, 'gi'))
+    .filter(Boolean)
+    .map((text, index) => ({ text, highlight: index % 2 === 1 }))
 })
 
 const router = useRouter()
@@ -52,13 +75,22 @@ const goToDetail = () => {
 <style scoped>
 .news-item {
   display: flex;
+  min-height: 106px;
   padding: 12px 16px;
-  border-bottom: 1px solid #f2f2f2;
-  background-color: #fff;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--surface-color);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.news-item:active {
+  background-color: var(--surface-muted);
 }
 
 .news-content {
   flex: 1;
+  min-width: 0;
   margin-right: 12px;
   overflow: hidden;
 }
@@ -77,7 +109,7 @@ const goToDetail = () => {
 
 .news-desc {
   font-size: 14px;
-  color: #666;
+  color: var(--text-color-light);
   margin: 0 0 8px;
   line-height: 1.4;
   overflow: hidden;
@@ -88,13 +120,21 @@ const goToDetail = () => {
 }
 
 .news-info {
-  font-size: 12px;
-  color: #999;
   display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 12px;
+  color: var(--text-color-lighter);
 }
 
 .news-info span {
-  margin-right: 10px;
+  min-width: 0;
+}
+
+.news-title mark {
+  padding: 0 1px;
+  color: inherit;
+  background-color: #fff3cd;
 }
 
 .news-image {
@@ -104,9 +144,22 @@ const goToDetail = () => {
 }
 
 .news-image img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 6px;
+  background-color: var(--surface-muted);
+}
+
+@media (max-width: 380px) {
+  .news-item {
+    padding: 12px;
+  }
+
+  .news-image {
+    width: 96px;
+    height: 72px;
+  }
 }
 </style>

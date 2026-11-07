@@ -29,11 +29,36 @@ import {
   Icon,
   Popup,
   Picker,
-  Search
+  Search,
+  Radio,
+  RadioGroup
 } from 'vant'
 
-// 导入Vant样式
-import 'vant/lib/index.css'
+// 只加载实际使用的组件样式，避免完整组件库 CSS 进入首屏。
+import 'vant/es/button/style'
+import 'vant/es/nav-bar/style'
+import 'vant/es/tabbar/style'
+import 'vant/es/tabbar-item/style'
+import 'vant/es/tab/style'
+import 'vant/es/tabs/style'
+import 'vant/es/list/style'
+import 'vant/es/pull-refresh/style'
+import 'vant/es/cell/style'
+import 'vant/es/cell-group/style'
+import 'vant/es/grid/style'
+import 'vant/es/grid-item/style'
+import 'vant/es/empty/style'
+import 'vant/es/form/style'
+import 'vant/es/field/style'
+import 'vant/es/image/style'
+import 'vant/es/toast/style'
+import 'vant/es/icon/style'
+import 'vant/es/popup/style'
+import 'vant/es/picker/style'
+import 'vant/es/search/style'
+import 'vant/es/dialog/style'
+import 'vant/es/radio/style'
+import 'vant/es/radio-group/style'
 
 // 导入全局样式
 import './style.css'
@@ -69,6 +94,8 @@ app.use(Icon)
 app.use(Popup)
 app.use(Picker)
 app.use(Search)
+app.use(Radio)
+app.use(RadioGroup)
 
 // 使用路由和状态管理
 app.use(router)

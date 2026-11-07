@@ -416,9 +416,11 @@ onActivated(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  padding-top: 46px;
-  padding-bottom: 50px;
+  height: 100dvh;
+  padding-top: var(--nav-height);
+  padding-bottom: calc(var(--tabbar-height) + var(--safe-area-inset-bottom));
   box-sizing: border-box;
+  background-color: var(--background-color);
 }
 
 .chat-content {
@@ -481,20 +483,21 @@ onActivated(() => {
 }
 
 .user-message .message-content {
-  background-color: #007aff;
-  color: white;
+  background-color: var(--primary-color);
+  color: #fff;
 }
 
 .ai-message .message-content {
-  background-color: #f2f2f2;
-  color: #333;
+  background-color: var(--surface-color);
+  color: var(--text-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .input-container {
   display: flex;
-  padding: 10px;
-  border-top: 1px solid #eee;
-  background-color: #fff;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border-color);
+  background-color: var(--surface-color);
 }
 
 .chat-input {

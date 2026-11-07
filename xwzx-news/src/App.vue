@@ -37,28 +37,22 @@ const keepAliveNames = computed(() =>
   box-sizing: border-box;
 }
 
-html, body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+html,
+body {
+  font-family: inherit;
   font-size: 16px;
-  background-color: #f7f8fa;
-  color: #333;
+  background-color: var(--background-color);
+  color: var(--text-color);
   height: 100%;
   width: 100%;
 }
 
 .app {
-  max-width: 750px;
+  width: 100%;
+  max-width: var(--content-max-width);
+  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0 auto;
-  height: 100%;
-}
-
-/* 移动端适配 */
-@media screen and (max-width: 750px) {
-  html {
-    font-size: calc(100vw / 750 * 16);
-  }
+  background-color: var(--background-color);
 }
 </style>

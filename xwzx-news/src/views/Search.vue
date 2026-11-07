@@ -14,53 +14,56 @@
         @input="onInput"
       >
         <template #action>
-          <div class="search-action" @click="onSearch">搜索</div>
+          <button type="button" class="search-action" @click="onSearch">搜索</button>
         </template>
       </van-search>
 
       <div v-if="showSuggest" class="suggest-panel">
         <div v-if="suggestions.news.length">
-          <div
+          <button
             v-for="item in suggestions.news"
             :key="item.id"
+            type="button"
             class="suggest-item"
             @click="goToNews(item.id)"
           >
             <van-icon name="search" class="suggest-icon" />
             <span class="suggest-text">{{ item.title }}</span>
-          </div>
+          </button>
         </div>
         <div v-if="suggestions.tags.length">
-          <div
+          <button
             v-for="tag in suggestions.tags"
             :key="tag.id"
+            type="button"
             class="suggest-item"
             @click="goToTag(tag.id)"
           >
             <van-icon name="bookmark-o" class="suggest-icon" />
             <span class="suggest-text">#{{ tag.name }}</span>
-          </div>
+          </button>
         </div>
         <div v-if="history.length">
           <div class="suggest-section">
             最近搜索
-            <span class="suggest-clear" @click="clearHistory">清空</span>
+            <button type="button" class="suggest-clear" @click="clearHistory">清空</button>
           </div>
-          <div
+          <button
             v-for="word in history"
             :key="word"
+            type="button"
             class="suggest-item"
             @click="useHistory(word)"
           >
             <van-icon name="clock-o" class="suggest-icon" />
             <span class="suggest-text">{{ word }}</span>
-          </div>
+          </button>
         </div>
       </div>
     </div>
 
     <div class="result-area">
-      <div v-if="searched && total > 0" class="result-meta">
+      <div v-if="searched && total > 0" class="result-meta" role="status" aria-live="polite">
         找到 {{ total }} 条相关新闻
       </div>
 
@@ -80,22 +83,27 @@
         />
       </van-list>
 
-      <van-empty v-if="searched && !loading && !list.length" description="没有找到相关新闻" />
+      <div v-if="searched && loadError" class="result-error" role="alert">
+        <span>{{ loadError }}</span>
+        <van-button size="small" type="primary" plain @click="retrySearch">重试</van-button>
+      </div>
+
+      <van-empty
+        v-if="searched && !loading && !loadError && !list.length"
+        description="没有找到相关新闻"
+      />
       <van-empty v-if="!searched" description="输入关键词，搜索标题和正文" />
     </div>
-
-    <tab-bar />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 
 import http from '../api/http'
 import NewsItem from '../components/NewsItem.vue'
-import TabBar from '../components/TabBar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -104,33 +112,51 @@ const PAGE_SIZE = 10
 const HISTORY_KEY = 'search_history'
 const HISTORY_LIMIT = 10
 
+const readHistory = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')
+    return Array.isArray(saved) ? saved.filter(item => typeof item === 'string').slice(0, HISTORY_LIMIT) : []
+  } catch (error) {
+    return []
+  }
+}
+
 const keyword = ref(route.query.keyword || '')
+const submittedKeyword = ref('')
 const list = ref([])
 const total = ref(0)
 const page = ref(1)
 const loading = ref(false)
 const finished = ref(false)
 const searched = ref(false)
-const history = ref(JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'))
+const loadError = ref('')
+const history = ref(readHistory())
 const suggestions = ref({ news: [], tags: [] })
 const showSuggest = ref(false)
 
-const highlightKeyword = computed(() => (searched.value ? keyword.value.trim() : ''))
+let debounceTimer = null
+let searchRequestSeq = 0
+let suggestRequestSeq = 0
+
+const highlightKeyword = computed(() => submittedKeyword.value)
 
 const goBack = () => router.back()
 
-let debounceTimer = null
 const onInput = () => {
   clearTimeout(debounceTimer)
   const kw = keyword.value.trim()
+  const requestId = ++suggestRequestSeq
+
   if (!kw) {
     suggestions.value = { news: [], tags: [] }
     showSuggest.value = history.value.length > 0
     return
   }
+
   debounceTimer = setTimeout(async () => {
     try {
       const res = await http.get('/api/news/suggest', { params: { keyword: kw } })
+      if (requestId !== suggestRequestSeq || kw !== keyword.value.trim()) return
       suggestions.value = res.data?.data || { news: [], tags: [] }
       showSuggest.value = true
     } catch (error) {
@@ -147,12 +173,20 @@ const onFocus = () => {
 const saveHistory = word => {
   const next = [word, ...history.value.filter(item => item !== word)].slice(0, HISTORY_LIMIT)
   history.value = next
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
+  } catch (error) {
+    // 隐私模式或存储已满时仍保留当前会话内的搜索历史
+  }
 }
 
 const clearHistory = () => {
   history.value = []
-  localStorage.removeItem(HISTORY_KEY)
+  try {
+    localStorage.removeItem(HISTORY_KEY)
+  } catch (error) {
+    // 本地存储不可用时只清内存状态
+  }
   showSuggest.value = false
 }
 
@@ -170,108 +204,151 @@ const fetchPage = async (reset = false) => {
   }
 
   if (reset) {
+    // 新搜索立即让旧请求和旧联想失效，即使旧请求迟到也不会污染结果。
+    searchRequestSeq += 1
+    suggestRequestSeq += 1
+    clearTimeout(debounceTimer)
     page.value = 1
     list.value = []
+    loadError.value = ''
     finished.value = false
     searched.value = true
+    submittedKeyword.value = kw
     showSuggest.value = false
     saveHistory(kw)
+  } else if (loading.value || finished.value) {
+    return
   }
 
-  if (loading.value || finished.value) return
-
+  const requestId = reset ? searchRequestSeq : ++searchRequestSeq
+  const requestedPage = page.value
   loading.value = true
+  loadError.value = ''
+
   try {
     const res = await http.get('/api/news/search', {
-      params: { keyword: kw, page: page.value, pageSize: PAGE_SIZE }
+      params: { keyword: kw, page: requestedPage, pageSize: PAGE_SIZE }
     })
+    if (requestId !== searchRequestSeq) return
+
     const data = res.data?.data || {}
     const items = data.list || []
-
     list.value = [...list.value, ...items]
     total.value = data.total || 0
     finished.value = items.length < PAGE_SIZE
-    page.value += 1
+    page.value = requestedPage + 1
   } catch (error) {
-    finished.value = true
+    if (requestId === searchRequestSeq) {
+      loadError.value = '搜索失败，请稍后重试'
+      finished.value = false
+    }
   } finally {
-    loading.value = false
+    if (requestId === searchRequestSeq) loading.value = false
   }
 }
 
 const onSearch = () => fetchPage(true)
 
 const onClear = () => {
+  searchRequestSeq += 1
+  suggestRequestSeq += 1
+  clearTimeout(debounceTimer)
   list.value = []
   total.value = 0
+  loadError.value = ''
   searched.value = false
   finished.value = false
+  submittedKeyword.value = ''
+  loading.value = false
 }
+
+const retrySearch = () => fetchPage()
 
 const loadMore = () => fetchPage()
 
 const goToNews = id => router.push(`/news/detail/${id}`)
 const goToTag = id => router.push(`/tag/${id}`)
 
-// 点击页面其他区域收起联想面板
-watch(showSuggest, visible => {
-  if (!visible) return
-  const close = () => {
+const closeSuggestOnOutsideClick = event => {
+  if (!event.target.closest('.search-bar')) {
     showSuggest.value = false
-    document.removeEventListener('click', close)
   }
-  setTimeout(() => document.addEventListener('click', close), 0)
-})
+}
 
 onMounted(() => {
+  document.addEventListener('click', closeSuggestOnOutsideClick)
   if (keyword.value.trim()) {
     fetchPage(true)
   }
+})
+
+onBeforeUnmount(() => {
+  searchRequestSeq += 1
+  suggestRequestSeq += 1
+  clearTimeout(debounceTimer)
+  document.removeEventListener('click', closeSuggestOnOutsideClick)
 })
 </script>
 
 <style scoped>
 .search-page {
-  padding-top: 46px;
-  padding-bottom: 50px;
   min-height: 100vh;
-  background-color: var(--background-color, #f7f8fa);
+  min-height: 100dvh;
+  padding-top: var(--nav-height);
+  padding-bottom: calc(20px + var(--safe-area-inset-bottom));
+  background-color: var(--background-color);
 }
 
 .search-bar {
   position: fixed;
-  top: 46px;
-  left: 0;
-  right: 0;
+  top: var(--nav-height);
+  left: 50%;
   z-index: 99;
-  max-width: 750px;
+  width: 100%;
+  max-width: var(--content-max-width);
   margin: 0 auto;
-  background-color: #fff;
+  background-color: var(--surface-color);
+  transform: translateX(-50%);
 }
 
 .search-action {
-  color: #1989fa;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--primary-color);
   font-size: 14px;
-  padding-left: 8px;
+  cursor: pointer;
 }
 
 .suggest-panel {
-  border-top: 1px solid #f2f3f5;
-  background-color: #fff;
   padding-bottom: 8px;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--surface-color);
 }
 
 .suggest-item {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  min-height: 44px;
   padding: 10px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text-color);
   font-size: 13px;
-  color: #323233;
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggest-item:active {
+  background-color: var(--surface-muted);
 }
 
 .suggest-icon {
-  color: #c8c9cc;
+  color: var(--text-color-lighter);
 }
 
 .suggest-text {
@@ -282,14 +359,21 @@ onMounted(() => {
 
 .suggest-section {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   padding: 8px 16px 4px;
+  color: var(--text-color-lighter);
   font-size: 12px;
-  color: #969799;
 }
 
 .suggest-clear {
-  color: #c8c9cc;
+  min-width: 44px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-color-light);
+  cursor: pointer;
 }
 
 .result-area {
@@ -298,13 +382,18 @@ onMounted(() => {
 
 .result-meta {
   padding: 8px 16px;
+  color: var(--text-color-lighter);
   font-size: 12px;
-  color: #969799;
 }
 
-:deep(mark) {
-  background-color: #fff3cd;
-  color: inherit;
-  padding: 0 1px;
+.result-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 16px;
+  color: var(--text-color-light);
+  font-size: 14px;
+  text-align: center;
 }
 </style>

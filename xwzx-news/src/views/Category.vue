@@ -88,33 +88,39 @@ onMounted(() => {
 
 <style scoped>
 .category {
-  padding-top: 46px;
-  padding-bottom: 50px;
-  background-color: #f7f8fa;
   min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: var(--nav-height);
+  padding-bottom: calc(var(--tabbar-height) + var(--safe-area-inset-bottom));
+  background-color: var(--background-color);
+  color: var(--text-color);
 }
 
 .category-container {
+  margin: 12px 16px;
   padding: 16px;
-  background-color: #fff;
-  margin-top: 12px;
-  border-radius: 8px;
+  border-radius: 12px;
+  background-color: var(--surface-color);
+}
+
+:deep(.van-grid) {
+  gap: 10px 0;
 }
 
 :deep(.van-grid-item__content) {
-  background-color: #f5f7fa;
-  border-radius: 8px;
-  padding: 20px 0;
+  min-height: 92px;
+  border-radius: 10px;
+  background-color: var(--surface-muted);
 }
 
 :deep(.van-grid-item__icon) {
+  color: var(--primary-color);
   font-size: 28px;
-  color: #1989fa;
 }
 
 :deep(.van-grid-item__text) {
   margin-top: 8px;
-  color: #333;
+  color: var(--text-color);
   font-size: 14px;
 }
 </style>

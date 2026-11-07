@@ -3,6 +3,7 @@
     <van-nav-bar
       :title="$t('settings.title')"
       left-arrow
+      fixed
       @click-left="onClickLeft"
     />
     
@@ -123,15 +124,22 @@ const changeLanguage = () => {
 
 <style scoped>
 .settings-container {
+  box-sizing: border-box;
   min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: var(--nav-height);
+  padding-bottom: calc(20px + var(--safe-area-inset-bottom));
   background-color: var(--background-color);
   color: var(--text-color);
-  padding-top: 46px;
-  padding-bottom: 20px;
 }
 
 .settings-list {
-  margin-top: 20px;
+  padding-top: 12px;
+}
+
+.popup-title,
+.theme-name {
+  color: var(--text-color);
 }
 
 .popup-title {
@@ -166,7 +174,8 @@ const changeLanguage = () => {
 }
 
 .theme-item.active .theme-color {
-  border-color: #1989fa;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 18%, transparent);
 }
 
 .theme-name {
@@ -182,6 +191,6 @@ const changeLanguage = () => {
 }
 
 .language-active {
-  background-color: #f5f5f5;
+  background-color: var(--surface-muted);
 }
 </style>

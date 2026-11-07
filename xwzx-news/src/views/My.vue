@@ -1,7 +1,15 @@
 <template>
   <div class="my-container">
-    <van-nav-bar :title="$t('my.title')" />
-    <div class="user-info" @click="goToProfile" v-if="isLogin">
+    <van-nav-bar :title="$t('my.title')" fixed />
+    <div
+      v-if="isLogin"
+      class="user-info user-info--link"
+      role="button"
+      tabindex="0"
+      @click="goToProfile"
+      @keydown.enter.prevent="goToProfile"
+      @keydown.space.prevent="goToProfile"
+    >
       <div class="avatar">
         <van-image
           round
@@ -209,37 +217,35 @@ onActivated(() => {
 
 <style scoped>
 .my-container {
-  padding-top: 46px;
-  padding-bottom: 50px;
+  box-sizing: border-box;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: calc(var(--nav-height) + 16px);
+  padding-bottom: calc(var(--tabbar-height) + var(--safe-area-inset-bottom));
   background-color: var(--background-color);
   color: var(--text-color);
-  min-height: 100vh;
-  box-sizing: border-box;
-}
-
-.van-nav-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  z-index: 999;
 }
 
 .user-info {
+  position: relative;
   display: flex;
   align-items: center;
+  margin: 0 16px 16px;
   padding: 20px 16px;
-  background-color: var(--primary-color);
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary-color), #0f6fdc);
   color: #fff;
-  border-radius: 8px;
-  margin: 16px;
-  position: relative;
+  box-shadow: 0 8px 20px rgba(25, 137, 250, 0.18);
+}
+
+.user-info--link {
+  cursor: pointer;
 }
 
 .arrow-icon {
   position: absolute;
   right: 16px;
-  color: #969799;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .avatar {
@@ -257,11 +263,18 @@ onActivated(() => {
 }
 
 .desc {
+  color: rgba(255, 255, 255, 0.82);
   font-size: 14px;
-  color: #999;
 }
 
 .menu-list {
   margin: 0 16px;
+}
+
+.menu-list :deep(.van-cell-group--inset) {
+  margin: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background-color: var(--surface-color);
 }
 </style>

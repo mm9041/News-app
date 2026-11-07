@@ -16,7 +16,15 @@
           <template #title>
             <div class="news-item">
               <div class="news-image" v-if="item.image">
-                <img :src="item.image" :alt="item.title" @error="onImageError">
+                <img
+                  :src="item.image"
+                  :alt="item.title"
+                  width="120"
+                  height="80"
+                  loading="lazy"
+                  decoding="async"
+                  @error="onImageError"
+                >
               </div>
               <div class="news-info">
                 <div class="news-title">{{ item.title }}</div>
@@ -29,11 +37,12 @@
             </div>
           </template>
         </van-cell>
-        <van-button 
-          class="delete-btn" 
-          type="danger" 
-          size="mini" 
+        <van-button
+          class="delete-btn"
+          type="danger"
+          size="mini"
           icon="cross"
+          aria-label="删除浏览记录"
           @click="confirmDelete(item.id)"
         ></van-button>
       </div>
@@ -142,10 +151,12 @@ onMounted(async () => {
 
 <style scoped>
 .history-container {
-  padding-top: 46px;
-  padding-bottom: 20px;
-  background-color: #f7f8fa;
   min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: var(--nav-height);
+  padding-bottom: calc(20px + var(--safe-area-inset-bottom));
+  background-color: var(--background-color);
+  color: var(--text-color);
 }
 
 .history-list {
@@ -225,24 +236,24 @@ onMounted(async () => {
 .history-item {
   position: relative;
   margin-bottom: 10px;
-  background-color: #fff;
-  border-radius: 8px;
   overflow: hidden;
+  border-radius: 10px;
+  background-color: var(--surface-color);
 }
 
 .delete-btn {
   position: absolute;
   top: 50%;
-  right: 10px;
-  transform: translateY(-50%);
+  right: 8px;
   z-index: 10;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  transform: translateY(-50%);
 }
 
 .delete-icon {
