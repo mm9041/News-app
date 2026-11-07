@@ -1,8 +1,6 @@
 """站内通知的读写。"""
 
-from typing import Optional
-
-from sqlalchemy import update, func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.comment import NewsComment
@@ -12,13 +10,13 @@ from models.users import User
 
 
 async def create(
-        db: AsyncSession,
-        user_id: int,
-        actor_id: int,
-        type_: str,
-        news_id: int,
-        comment_id: Optional[int] = None,
-) -> Optional[Notification]:
+    db: AsyncSession,
+    user_id: int,
+    actor_id: int,
+    type_: str,
+    news_id: int,
+    comment_id: int | None = None,
+) -> Notification | None:
     """给 user_id 发一条通知。自己操作自己的内容时不发（调用方保证）。"""
     notification = Notification(
         user_id=user_id,
@@ -35,11 +33,7 @@ async def create(
 
 async def list_for_user(db: AsyncSession, user_id: int, skip: int, limit: int):
     """返回 ([(通知, 触发者, 新闻标题, 评论内容)], 总数)。"""
-    total = (
-        await db.execute(
-            select(func.count(Notification.id)).where(Notification.user_id == user_id)
-        )
-    ).scalar_one()
+    total = (await db.execute(select(func.count(Notification.id)).where(Notification.user_id == user_id))).scalar_one()
 
     if not total:
         return [], 0
@@ -62,9 +56,7 @@ async def list_for_user(db: AsyncSession, user_id: int, skip: int, limit: int):
 async def count_unread(db: AsyncSession, user_id: int) -> int:
     return (
         await db.execute(
-            select(func.count(Notification.id)).where(
-                Notification.user_id == user_id, Notification.is_read.is_(False)
-            )
+            select(func.count(Notification.id)).where(Notification.user_id == user_id, Notification.is_read.is_(False))
         )
     ).scalar_one()
 

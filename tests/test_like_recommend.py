@@ -20,7 +20,7 @@ def test_like_and_unlike_are_idempotent(client, temp_user):
     headers = _auth(temp_user)
     # 清场：确保起始状态是「没赞过」
     client.delete(f"/api/news/{NEWS_ID}/like", headers=headers)
-    base = client.get("/api/news/detail", params={"id": NEWS_ID}, headers=headers).json()["data"]["likes"]
+    base = client.get(f"/api/news/{NEWS_ID}", headers=headers).json()["data"]["likes"]
 
     first = client.put(f"/api/news/{NEWS_ID}/like", headers=headers)
     assert first.status_code == 200
@@ -30,7 +30,7 @@ def test_like_and_unlike_are_idempotent(client, temp_user):
     second = client.put(f"/api/news/{NEWS_ID}/like", headers=headers)
     assert second.json()["data"]["likes"] == base + 1
 
-    detail = client.get("/api/news/detail", params={"id": NEWS_ID}, headers=headers).json()["data"]
+    detail = client.get(f"/api/news/{NEWS_ID}", headers=headers).json()["data"]
     assert detail["isLiked"] is True
     assert detail["likes"] == base + 1
 
@@ -44,7 +44,7 @@ def test_like_and_unlike_are_idempotent(client, temp_user):
 
 
 def test_guest_detail_has_likes_flag(client):
-    resp = client.get("/api/news/detail", params={"id": NEWS_ID})
+    resp = client.get(f"/api/news/{NEWS_ID}")
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert "likes" in data
@@ -80,7 +80,7 @@ def test_recommend_respects_limit(client, temp_user):
 def test_recommend_excludes_read_news(client, temp_user):
     """看过的不该再被推荐 —— 兴趣分类和热门补齐两条路径都要排除。"""
     headers = _auth(temp_user)
-    client.post("/api/history/add", json={"newsId": NEWS_ID}, headers=headers)
+    client.post("/api/history", json={"newsId": NEWS_ID}, headers=headers)
 
     resp = client.get("/api/news/recommend", params={"limit": 20}, headers=headers)
     assert resp.status_code == 200

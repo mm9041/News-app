@@ -19,7 +19,7 @@ def _upload(client, token, content, filename="a.png", content_type="image/png"):
 
 
 def _local_path(url: str) -> Path:
-    """"http://testserver/uploads/2026/10/xx.png" -> 本地绝对路径"""
+    """ "http://testserver/uploads/2026/10/xx.png" -> 本地绝对路径"""
     rel = url.split("://", 1)[1].split("/", 1)[1]  # uploads/2026/10/xx.png
     return ROOT / rel
 

@@ -291,6 +291,14 @@ const onFileChange = async event => {
   }
 }
 
+// 中英文逗号都当分隔符，去空、去重、最多 5 个（后端也会再截一次）
+const parseTags = () => [...new Set(
+  form.value.tagsText
+    .split(/[,，]/)
+    .map(item => item.trim())
+    .filter(Boolean)
+)].slice(0, 5)
+
 const buildPayload = () => ({
   title: form.value.title.trim(),
   description: form.value.description.trim() || null,
@@ -298,18 +306,19 @@ const buildPayload = () => ({
   image: form.value.image.trim() || null,
   author: form.value.author.trim() || null,
   categoryId: form.value.categoryId,
-  // 中英文逗号都当分隔符，去空、去重、最多 5 个（后端也会再截一次）
-  tags: [...new Set(
-    form.value.tagsText
-      .split(/[,，]/)
-      .map(item => item.trim())
-      .filter(Boolean)
-  )].slice(0, 5)
+  tags: parseTags()
 })
 
 const save = async () => {
   if (!form.value.categoryId) {
     showToast('请选择分类')
+    return
+  }
+
+  // tag.name 是 VARCHAR(30)，超长会被数据库静默截断（不同长标签还可能撞成同一个）
+  const tooLongTag = parseTags().find(item => item.length > 30)
+  if (tooLongTag) {
+    showToast(`标签「${tooLongTag}」不能超过 30 个字符`)
     return
   }
 

@@ -1,23 +1,22 @@
-from fastapi.encoders import jsonable_encoder
-from sqlalchemy import select, func, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
 import asyncio
 import random
 from datetime import datetime
 
+from fastapi.encoders import jsonable_encoder
+from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from cache import view_counter
-from config.cache_conf import get_json_cache, redis_client, set_cache
 from cache.news_cache import (
     DETAIL_CACHE_PREFIX,
     get_cached_categories,
-    set_cache_categories,
     get_cached_news_list,
+    set_cache_categories,
     set_cache_news_list,
-    invalidate_news_list,
 )
-from crud.news_views import apply_view_deltas
+from config.cache_conf import get_json_cache, redis_client, set_cache
 from crud import tag as tag_crud
+from crud.news_views import apply_view_deltas
 from models.news import Category, News
 from schemas.base import NewsItemBase
 from utils.logger import get_logger
@@ -29,8 +28,8 @@ DETAIL_LOCK_PREFIX = "lock:news:detail:"
 # 点赞/评论那条路径不该为它多查两次库。
 EXTRAS_CACHE_PREFIX = "news:extras:"
 DETAIL_TTL_BASE = 120
-DETAIL_TTL_JITTER = 60      # 抖动范围，避免同批 key 同时过期（雪崩）
-NULL_TTL = 30               # 空值缓存，防穿透
+DETAIL_TTL_JITTER = 60  # 抖动范围，避免同批 key 同时过期（雪崩）
+NULL_TTL = 30  # 空值缓存，防穿透
 LOCK_TTL = 3
 LOCK_WAIT_ROUNDS = 10
 LOCK_WAIT_INTERVAL = 0.05
@@ -64,17 +63,22 @@ async def get_news_list(db: AsyncSession, category_id: int, skip: int = 0, limit
         # 缓存里存的是库里的原值，这里再叠加尚未回写的阅读量增量
         return await apply_view_deltas([NewsItemBase.model_validate(item) for item in cached_list])
 
-    stmt = (select(News)
-            .where(News.category_id == category_id)
-            # 不显式排序时，分页顺序取决于存储引擎/执行计划，翻页可能重复或漏条；
-            # id 做次级键是为了 publish_time 相同（同一天批量导入）时顺序仍然稳定。
-            .order_by(News.publish_time.desc(), News.id.desc())
-            .offset(skip).limit(limit))
+    stmt = (
+        select(News)
+        .where(News.category_id == category_id)
+        # 不显式排序时，分页顺序取决于存储引擎/执行计划，翻页可能重复或漏条；
+        # id 做次级键是为了 publish_time 相同（同一天批量导入）时顺序仍然稳定。
+        .order_by(News.publish_time.desc(), News.id.desc())
+        .offset(skip)
+        .limit(limit)
+    )
     result = await db.execute(stmt)
     items = [NewsItemBase.model_validate(row) for row in result.scalars().all()]
     if items:
         await set_cache_news_list(
-            category_id, page, limit,
+            category_id,
+            page,
+            limit,
             [item.model_dump(mode="json", by_alias=False) for item in items],
         )
     return await apply_view_deltas(items)
@@ -187,9 +191,7 @@ async def invalidate_news_detail(news_id: int) -> None:
     标签和「相关推荐」跟着详情一起失效：改标题、改分类、换标签都会影响它们。
     """
     try:
-        await redis_client.delete(
-            f"{DETAIL_CACHE_PREFIX}{news_id}", f"{EXTRAS_CACHE_PREFIX}{news_id}"
-        )
+        await redis_client.delete(f"{DETAIL_CACHE_PREFIX}{news_id}", f"{EXTRAS_CACHE_PREFIX}{news_id}")
     except Exception as e:
         logger.warning("清理详情缓存失败（news_id=%s）：%s", news_id, e)
 
@@ -214,32 +216,36 @@ async def increase_news_views(db: AsyncSession, news_id: int, current_views: int
     return current_views + 1
 
 
-async def _fetch_related_rows(db: AsyncSession, news_id: int, category_id: int,
-                              limit: int = 5) -> list[dict]:
+async def _fetch_related_rows(db: AsyncSession, news_id: int, category_id: int, limit: int = 5) -> list[dict]:
     """查库拿相关推荐，`views` 是**库内原值**（不在这一层叠加 Redis 增量）。
 
     缓存里存的必须是原值：存叠加后的值，命中缓存时会把同一份增量再加一遍。
     """
-    stmt = select(News).where(
-        News.category_id == category_id,
-        News.id != news_id,
-    ).order_by(
-        News.views.desc(),
-        News.publish_time.desc()
-    ).limit(limit)
+    stmt = (
+        select(News)
+        .where(
+            News.category_id == category_id,
+            News.id != news_id,
+        )
+        .order_by(News.views.desc(), News.publish_time.desc())
+        .limit(limit)
+    )
     result = await db.execute(stmt)
-    return [{
-        "id": news.id,
-        "title": news.title,
-        "content": news.content,
-        "image": news.image,
-        "author": news.author,
-        # 必须转成字符串再进缓存：json.dumps 不认 datetime，
-        # 写缓存会静默失败（只留一条 warning），缓存等于没生效。
-        "publishTime": news.publish_time.isoformat() if news.publish_time else None,
-        "categoryId": news.category_id,
-        "views": news.views
-    } for news in result.scalars().all()]
+    return [
+        {
+            "id": news.id,
+            "title": news.title,
+            "content": news.content,
+            "image": news.image,
+            "author": news.author,
+            # 必须转成字符串再进缓存：json.dumps 不认 datetime，
+            # 写缓存会静默失败（只留一条 warning），缓存等于没生效。
+            "publishTime": news.publish_time.isoformat() if news.publish_time else None,
+            "categoryId": news.category_id,
+            "views": news.views,
+        }
+        for news in result.scalars().all()
+    ]
 
 
 async def _apply_related_view_deltas(rows: list[dict]) -> list[dict]:
@@ -271,8 +277,7 @@ async def get_detail_extras(db: AsyncSession, news_id: int, category_id: int) ->
     cached = await get_json_cache(key)
     if cached is not None:
         # 深拷贝一份再叠加增量，别把缓存里那份共享 dict 改脏
-        cached = {"tags": cached.get("tags", []),
-                  "related": [dict(row) for row in cached.get("related", [])]}
+        cached = {"tags": cached.get("tags", []), "related": [dict(row) for row in cached.get("related", [])]}
         cached["related"] = await _apply_related_view_deltas(cached["related"])
         return cached
 
@@ -281,9 +286,7 @@ async def get_detail_extras(db: AsyncSession, news_id: int, category_id: int) ->
         "tags": [{"id": tag.id, "name": tag.name} for tag in tag_rows],
         "related": await _fetch_related_rows(db, news_id, category_id),
     }
-    await set_cache(
-        key, payload, DETAIL_TTL_BASE + random.randint(0, DETAIL_TTL_JITTER)
-    )
+    await set_cache(key, payload, DETAIL_TTL_BASE + random.randint(0, DETAIL_TTL_JITTER))
     return {
         "tags": payload["tags"],
         "related": await _apply_related_view_deltas([dict(row) for row in payload["related"]]),

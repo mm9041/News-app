@@ -24,19 +24,17 @@ TOP_CATEGORIES = 3
 
 
 async def _hot_news(
-        db: AsyncSession,
-        limit: int,
-        exclude: set[int] | None = None,
-        exclude_read_by: int | None = None,
+    db: AsyncSession,
+    limit: int,
+    exclude: set[int] | None = None,
+    exclude_read_by: int | None = None,
 ):
     stmt = select(News)
     if exclude:
         stmt = stmt.where(News.id.not_in(exclude))
     if exclude_read_by:
         # 热门补齐也要排掉已读，否则「刚看完的又出现在猜你喜欢里」
-        stmt = stmt.where(
-            News.id.not_in(select(History.news_id).where(History.user_id == exclude_read_by))
-        )
+        stmt = stmt.where(News.id.not_in(select(History.news_id).where(History.user_id == exclude_read_by)))
     stmt = stmt.order_by(News.views.desc(), News.publish_time.desc(), News.id.desc()).limit(limit)
     return list((await db.execute(stmt)).scalars().all())
 
@@ -89,7 +87,5 @@ async def recommend_news(db: AsyncSession, user_id: int | None, limit: int = 8):
 
     # 兴趣分类里的未读新闻不够，用热门补齐（同样排除已读）
     picked = {item.id for item in rows}
-    rows.extend(
-        await _hot_news(db, limit - len(rows), exclude=picked, exclude_read_by=user_id)
-    )
+    rows.extend(await _hot_news(db, limit - len(rows), exclude=picked, exclude_read_by=user_id))
     return rows

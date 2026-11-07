@@ -18,6 +18,7 @@ class Base(DeclarativeBase):
     这里刻意不放任何列 —— 有列的话会被所有子类继承，
     而 user_token / favorite / history 等表并没有那些列。
     """
+
     pass
 
 
@@ -32,14 +33,7 @@ class TimestampMixin:
     写成 default=datetime.now() 会在模块导入时求值，冻结成固定时间戳（不报错但数据全错）。
     """
 
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP,
-        default=datetime.now,
-        comment="创建时间"
-    )
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.now, comment="创建时间")
     updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP,
-        default=datetime.now,
-        onupdate=datetime.now,
-        comment="更新时间"
+        TIMESTAMP, default=datetime.now, onupdate=datetime.now, comment="更新时间"
     )

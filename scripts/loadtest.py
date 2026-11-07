@@ -1,8 +1,8 @@
 """简易压测脚本（不依赖 locust / ab）。
 
 用法：
-    python scripts/loadtest.py --path "/api/news/detail?id=45" --concurrency 20 --duration 8
-    python scripts/loadtest.py --path "/api/news/list?categoryId=1&pageSize=10" --concurrency 50
+    python scripts/loadtest.py --path "/api/news/45" --concurrency 20 --duration 8
+    python scripts/loadtest.py --path "/api/news?categoryId=1&pageSize=10" --concurrency 50
 
 输出 QPS、延迟分位和错误率。用来验证缓存（详情页）和索引（列表）到底有没有用。
 
@@ -47,7 +47,7 @@ def percentile(values: list, ratio: float) -> float:
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default="http://127.0.0.1:8000")
-    parser.add_argument("--path", default="/api/news/detail?id=45")
+    parser.add_argument("--path", default="/api/news/45")
     parser.add_argument("--concurrency", type=int, default=20)
     parser.add_argument("--duration", type=float, default=8.0, help="压测持续秒数")
     parser.add_argument("--token", default=None, help="可选：Authorization 头")
@@ -66,10 +66,7 @@ async def main():
 
         started = time.perf_counter()
         deadline = started + args.duration
-        await asyncio.gather(*[
-            worker(client, url, deadline, results, errors)
-            for _ in range(args.concurrency)
-        ])
+        await asyncio.gather(*[worker(client, url, deadline, results, errors) for _ in range(args.concurrency)])
         elapsed = time.perf_counter() - started
 
     total = len(results) + sum(errors.values())

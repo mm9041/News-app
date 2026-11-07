@@ -1,8 +1,8 @@
+import json
 import os
 from pathlib import Path
 from typing import Any
 
-import json
 import redis.asyncio as redis
 from dotenv import load_dotenv
 from redis.backoff import NoBackoff

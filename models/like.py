@@ -1,8 +1,8 @@
 from datetime import datetime
 
 from sqlalchemy import ForeignKey, Index, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.mysql import TIMESTAMP
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, UnsignedInt
 
@@ -16,6 +16,7 @@ class NewsLike(Base):
     点赞总数不冗余到 `news` 表：那会引出「计数什么时候减、缓存怎么失效」
     一整套问题，而单条新闻的 COUNT 走 `idx_news_like_news`，代价很低。
     """
+
     __tablename__ = "news_like"
 
     __table_args__ = (

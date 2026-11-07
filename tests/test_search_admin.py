@@ -8,8 +8,14 @@ import uuid
 import pytest
 
 LIST_ITEM_FIELDS = {
-    "id", "title", "description", "image",
-    "author", "categoryId", "views", "publishTime",
+    "id",
+    "title",
+    "description",
+    "image",
+    "author",
+    "categoryId",
+    "views",
+    "publishTime",
 }
 
 MARK = "唯一探针标记"
@@ -116,7 +122,7 @@ def test_admin_list_returns_content(client, admin_user):
 
 def test_created_news_appears_in_public_list(client, created_news):
     """写操作必须让列表缓存失效，否则最多 30 分钟看不到。"""
-    resp = client.get("/api/news/list", params={"categoryId": 1, "pageSize": 10})
+    resp = client.get("/api/news", params={"categoryId": 1, "pageSize": 10})
     ids = [item["id"] for item in resp.json()["data"]["list"]]
     assert created_news["id"] in ids
 

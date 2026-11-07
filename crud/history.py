@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select, func, delete
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,16 +20,12 @@ async def add_history(db: AsyncSession, user_id: int, news_id: int):
     """
     now = datetime.now()
     stmt = (
-        insert(History)
-        .values(user_id=user_id, news_id=news_id, view_time=now)
-        .on_duplicate_key_update(view_time=now)
+        insert(History).values(user_id=user_id, news_id=news_id, view_time=now).on_duplicate_key_update(view_time=now)
     )
     await db.execute(stmt)
     await db.commit()
 
-    result = await db.execute(
-        select(History).where(History.user_id == user_id, History.news_id == news_id)
-    )
+    result = await db.execute(select(History).where(History.user_id == user_id, History.news_id == news_id))
     return result.scalar_one_or_none()
 
 
@@ -39,13 +35,16 @@ async def get_history_list(db: AsyncSession, user_id: int, page: int = 1, page_s
     count_result = await db.execute(count_query)
     total = count_result.scalar_one()
 
-    query = (select(News, History.view_time.label("view_time"), History.id.label("history_id"))
-             .join(History, History.news_id == News.id)
-             .where(History.user_id == user_id)
-             # id 做次级键：view_time 是 TIMESTAMP 秒精度，同一秒内的多条记录
-             # 只按时间排序顺序不确定，翻页会重复或漏条。索引 idx_user_view 也按这个顺序建。
-             .order_by(History.view_time.desc(), History.id.desc())
-             .offset(offset).limit(page_size))
+    query = (
+        select(News, History.view_time.label("view_time"), History.id.label("history_id"))
+        .join(History, History.news_id == News.id)
+        .where(History.user_id == user_id)
+        # id 做次级键：view_time 是 TIMESTAMP 秒精度，同一秒内的多条记录
+        # 只按时间排序顺序不确定，翻页会重复或漏条。索引 idx_user_view 也按这个顺序建。
+        .order_by(History.view_time.desc(), History.id.desc())
+        .offset(offset)
+        .limit(page_size)
+    )
 
     result = await db.execute(query)
     rows = result.all()

@@ -18,7 +18,7 @@ UPDATE 行锁。
 Redis 不可用时全部退化为直写数据库，行为与改造前一致 —— 缓存层本来就该是可选的。
 """
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from config.cache_conf import redis_client
 from utils.logger import get_logger
@@ -32,7 +32,7 @@ def _key(news_id: int) -> str:
     return f"{VIEW_DELTA_PREFIX}{news_id}"
 
 
-async def increase(news_id: int) -> Optional[int]:
+async def increase(news_id: int) -> int | None:
     """给某条新闻的待回写增量 +1，返回累计增量；Redis 不可用返回 None。"""
     try:
         return await redis_client.incr(_key(news_id))

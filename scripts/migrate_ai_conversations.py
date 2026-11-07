@@ -50,25 +50,18 @@ def main() -> int:
         conv_id = None
 
         for chat_id, user_id, message, created_at in rows:
-            need_new = (
-                user_id != current_user
-                or last_time is None
-                or (created_at - last_time) > GAP
-            )
+            need_new = user_id != current_user or last_time is None or (created_at - last_time) > GAP
             if need_new:
                 title = (message or "").strip().replace("\n", " ")[:TITLE_LEN] or "历史对话"
                 cur.execute(
-                    "INSERT INTO ai_conversation (user_id, title, created_at, updated_at) "
-                    "VALUES (%s, %s, %s, %s)",
+                    "INSERT INTO ai_conversation (user_id, title, created_at, updated_at) VALUES (%s, %s, %s, %s)",
                     (user_id, title, created_at, created_at),
                 )
                 conv_id = cur.lastrowid
                 current_user = user_id
                 created += 1
 
-            cur.execute(
-                "UPDATE ai_chat SET conversation_id=%s WHERE id=%s", (conv_id, chat_id)
-            )
+            cur.execute("UPDATE ai_chat SET conversation_id=%s WHERE id=%s", (conv_id, chat_id))
             last_time = created_at
 
     with conn.cursor() as cur:

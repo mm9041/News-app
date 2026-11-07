@@ -22,7 +22,7 @@ export const useHistoryStore = defineStore('history', {
       }
       
       try {
-        const response = await http.post('/api/history/add', { newsId });
+        const response = await http.post('/api/history', { newsId });
         
         if (response.data.code === 200) {
           return { success: true, data: response.data.data };
@@ -77,7 +77,7 @@ export const useHistoryStore = defineStore('history', {
       }
       
       try {
-        const response = await http.delete('/api/history/clear');
+        const response = await http.delete('/api/history');
         
         if (response.data.code === 200) {
           // 更新本地历史记录
@@ -110,7 +110,7 @@ export const useHistoryStore = defineStore('history', {
       }
       
       try {
-        const response = await http.delete(`/api/history/delete/${id}`);
+        const response = await http.delete(`/api/history/${id}`);
         
         if (response.data.code === 200) {
           // 更新本地历史记录
@@ -149,7 +149,7 @@ export const useHistoryStore = defineStore('history', {
       }
       
       try {
-        const response = await http.get('/api/history/list');
+        const response = await http.get('/api/history');
         
         if (response.data.code === 200) {
           // 正确获取list数组

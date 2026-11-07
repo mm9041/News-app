@@ -8,11 +8,17 @@
 
 import pytest
 
-LIST = "/api/news/list"
+LIST = "/api/news"
 
 EXPECTED_FIELDS = {
-    "id", "title", "description", "image",
-    "author", "categoryId", "views", "publishTime",
+    "id",
+    "title",
+    "description",
+    "image",
+    "author",
+    "categoryId",
+    "views",
+    "publishTime",
 }
 
 
@@ -79,13 +85,13 @@ def test_listing_unknown_category_returns_empty(client):
 
 
 def test_detail_not_found(client):
-    resp = client.get("/api/news/detail", params={"id": 999999})
+    resp = client.get("/api/news/999999")
     assert resp.status_code == 404
     assert resp.json() == {"code": 404, "message": "新闻不存在", "data": None}
 
 
 def test_protected_endpoint_without_token(client):
-    resp = client.get("/api/user/info")
+    resp = client.get("/api/user/me")
     assert resp.status_code == 401
     body = resp.json()
     assert body["code"] == 401

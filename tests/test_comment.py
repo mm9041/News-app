@@ -15,7 +15,7 @@ NEWS_ID = 45
 
 def _add(client, token, content, news_id=NEWS_ID):
     return client.post(
-        "/api/comment/add",
+        "/api/comment",
         json={"newsId": news_id, "content": content},
         headers={"Authorization": token},
     )
@@ -23,7 +23,7 @@ def _add(client, token, content, news_id=NEWS_ID):
 
 def _list(client, token=None, news_id=NEWS_ID):
     headers = {"Authorization": token} if token else {}
-    return client.get("/api/comment/list", params={"newsId": news_id}, headers=headers)
+    return client.get("/api/comment", params={"newsId": news_id}, headers=headers)
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def comment(client, other_user):
 
 
 def test_add_requires_login(client):
-    resp = client.post("/api/comment/add", json={"newsId": NEWS_ID, "content": "hi"})
+    resp = client.post("/api/comment", json={"newsId": NEWS_ID, "content": "hi"})
     assert resp.status_code == 401
 
 

@@ -46,7 +46,7 @@ def test_register_stores_hash_not_plaintext(client, temp_user, db):
     token = temp_user["token"]
 
     # 明文 token 能正常鉴权
-    resp = client.get("/api/user/info", headers={"Authorization": token})
+    resp = client.get("/api/user/me", headers={"Authorization": token})
     assert resp.status_code == 200
     assert resp.json()["data"]["username"] == temp_user["username"]
 
@@ -61,7 +61,7 @@ def test_register_stores_hash_not_plaintext(client, temp_user, db):
 
 def test_bearer_prefix_also_works(client, temp_user):
     resp = client.get(
-        "/api/user/info",
+        "/api/user/me",
         headers={"Authorization": f"Bearer {temp_user['token']}"},
     )
     assert resp.status_code == 200
@@ -83,16 +83,16 @@ def test_login_sets_httponly_cookie_and_logout_clears_it(client, temp_user):
     assert "samesite=lax" in set_cookie
 
     # 不带 Authorization 头，只靠 cookie
-    info = client.get("/api/user/info")
+    info = client.get("/api/user/me")
     assert info.status_code == 200
     assert info.json()["data"]["username"] == temp_user["username"]
 
     assert client.post("/api/user/logout").status_code == 200
-    assert client.get("/api/user/info").status_code == 401, "登出后旧 cookie 必须失效"
+    assert client.get("/api/user/me").status_code == 401, "登出后旧 cookie 必须失效"
 
 
 def test_invalid_token_is_rejected(client):
-    resp = client.get("/api/user/info", headers={"Authorization": "not-a-real-token"})
+    resp = client.get("/api/user/me", headers={"Authorization": "not-a-real-token"})
     assert resp.status_code == 401
     assert resp.json()["code"] == 401
 
@@ -108,8 +108,8 @@ def test_duplicate_username_is_rejected(client, temp_user):
 
 def test_update_profile_accepts_null_fields(client, temp_user):
     """v2 里 `field: str = None` 会让显式传 null 直接 422，这里盯住回归。"""
-    resp = client.put(
-        "/api/user/update",
+    resp = client.patch(
+        "/api/user",
         json={"nickname": None, "bio": "pytest 简介"},
         headers={"Authorization": temp_user["token"]},
     )

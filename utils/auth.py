@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 
 from fastapi import Cookie, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +42,7 @@ def clear_token_cookie(response) -> None:
     response.delete_cookie(TOKEN_COOKIE_NAME, path="/")
 
 
-def _extract_token(authorization: Optional[str]) -> Optional[str]:
+def _extract_token(authorization: str | None) -> str | None:
     """从 Authorization 头取出 token。
 
     裸 token 与 "Bearer xxx" 都接受。用切片而不是 replace：
@@ -57,15 +56,15 @@ def _extract_token(authorization: Optional[str]) -> Optional[str]:
     return token or None
 
 
-def token_from_request(authorization: Optional[str], access_token: Optional[str]) -> Optional[str]:
+def token_from_request(authorization: str | None, access_token: str | None) -> str | None:
     """按「header 优先、cookie 兜底」的顺序取 token。"""
     return _extract_token(authorization) or _extract_token(access_token)
 
 
 async def get_current_user(
-        authorization: Optional[str] = Header(None, alias="Authorization"),
-        access_token: Optional[str] = Cookie(None, alias=TOKEN_COOKIE_NAME),
-        db: AsyncSession = Depends(get_database)
+    authorization: str | None = Header(None, alias="Authorization"),
+    access_token: str | None = Cookie(None, alias=TOKEN_COOKIE_NAME),
+    db: AsyncSession = Depends(get_database),
 ):
     """从 Authorization 头或 httpOnly cookie 取出 token 并查出用户。
 
@@ -79,32 +78,23 @@ async def get_current_user(
     """
     token = token_from_request(authorization, access_token)
     if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="未提供令牌，请先登录"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未提供令牌，请先登录")
 
     user = await users.get_user_by_token(db, token)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的令牌或已经过期的令牌"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的令牌或已经过期的令牌")
     if user.status:
         # 管理员禁用的账号：身份对、但被拉黑，返回 403 而不是 401（不该引导去登录）
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="账号已被禁用，请联系管理员"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已被禁用，请联系管理员")
 
     return user
 
 
 async def get_optional_user(
-        authorization: Optional[str] = Header(None, alias="Authorization"),
-        access_token: Optional[str] = Cookie(None, alias=TOKEN_COOKIE_NAME),
-        db: AsyncSession = Depends(get_database)
-) -> Optional[User]:
+    authorization: str | None = Header(None, alias="Authorization"),
+    access_token: str | None = Cookie(None, alias=TOKEN_COOKIE_NAME),
+    db: AsyncSession = Depends(get_database),
+) -> User | None:
     """可选登录：没带凭证、或 token 失效时都返回 None，不抛 401。
 
     评论列表这类「游客能看、登录后才决定能不能删」的接口用它。
@@ -124,8 +114,5 @@ async def get_current_admin(user: User = Depends(get_current_user)) -> User:
     前端拿到 401 会清登录态并跳登录页，403 不应该触发这个逻辑。
     """
     if not user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="需要管理员权限"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
     return user

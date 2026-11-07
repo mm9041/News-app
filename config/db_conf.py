@@ -22,9 +22,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 # 用 async 引擎必须带异步驱动：mysql+aiomysql://
 # 写成 mysql:// 或 mysql+pymysql:// 会报 "The asyncio extension requires an async driver"
-ASYNC_DATABASE_URL = (
-    f"mysql+aiomysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
-)
+ASYNC_DATABASE_URL = f"mysql+aiomysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
@@ -36,7 +34,7 @@ async_engine = create_async_engine(
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,
     class_=AsyncSession,
-    expire_on_commit=False
+    expire_on_commit=False,  # 控制事务提交后，session 里已加载对象的属性是否被标记为“过期”，异步环境下必须关掉
 )
 
 
@@ -46,7 +44,7 @@ async def get_database():
             yield session
             await session.commit()
         except Exception:
-            await session.rollback()
+            await session.rollback()  # 回滚操作
             # 必须 re-raise：否则路由抛的 HTTPException 会被吃掉，
             # FastAPI 会误报 "Response not awaited..."
             raise

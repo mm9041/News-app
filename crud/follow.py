@@ -80,9 +80,7 @@ async def list_followed_authors(db: AsyncSession, user_id: int):
 async def list_news_by_author(db: AsyncSession, author: str, skip: int, limit: int):
     """某个作者（报纸/人名）发布的全部新闻，按发布时间倒序。"""
     name = _clean(author)
-    total = (
-        await db.execute(select(func.count(News.id)).where(News.author == name))
-    ).scalar_one()
+    total = (await db.execute(select(func.count(News.id)).where(News.author == name))).scalar_one()
 
     if not total:
         return [], 0

@@ -1,8 +1,8 @@
 from datetime import datetime
 
 from sqlalchemy import ForeignKey, Index, String
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.mysql import TIMESTAMP
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, UnsignedInt
 
@@ -14,6 +14,7 @@ class AiConversation(Base):
     `updated_at` 在每次追问时手动 touch —— MySQL 的 ON UPDATE CURRENT_TIMESTAMP
     只在 UPDATE 本表时触发，插 ai_chat 不会连带更新它。
     """
+
     __tablename__ = "ai_conversation"
 
     __table_args__ = (

@@ -12,18 +12,25 @@
       <div class="title-container">
         <h1 class="title">{{ newsStore.newsDetail.title }}</h1>
         <div class="title-actions">
-          <div class="like-btn" :class="{ 'is-liked': liked }" @click="toggleLike">
+          <button
+            type="button"
+            class="like-btn"
+            :class="{ 'is-liked': liked }"
+            :aria-label="liked ? '取消点赞' : '点赞'"
+            @click="toggleLike"
+          >
             <van-icon :name="liked ? 'good-job' : 'good-job-o'" size="20" />
             <span class="like-count">{{ likes }}</span>
-          </div>
-          <div
+          </button>
+          <button
             v-if="followTarget"
+            type="button"
             class="follow-author-btn"
             :class="{ 'is-following': isFollowing }"
             @click="toggleFollow"
           >
             {{ isFollowing ? '已关注' : '关注作者' }}
-          </div>
+          </button>
           <van-button
             class="favorite-btn"
             :icon="isFavorite ? 'star' : 'star-o'"
@@ -40,7 +47,15 @@
       </div>
 
       <div class="cover" v-if="newsStore.newsDetail.image">
-        <img :src="newsStore.newsDetail.image" :alt="newsStore.newsDetail.title" @error="onImageError">
+        <img
+          :src="newsStore.newsDetail.image"
+          :alt="newsStore.newsDetail.title"
+          width="640"
+          height="360"
+          decoding="async"
+          fetchpriority="high"
+          @error="onImageError"
+        >
       </div>
       
       <div class="content">
@@ -50,14 +65,15 @@
       </div>
       
       <div class="tag-list" v-if="newsStore.newsDetail.tags?.length">
-        <span
+        <button
           v-for="tag in newsStore.newsDetail.tags"
           :key="tag.id"
+          type="button"
           class="tag-item"
           @click="goToTag(tag.id)"
         >
           #{{ tag.name }}
-        </span>
+        </button>
       </div>
 
       <div class="related-news" v-if="newsStore.newsDetail.relatedNews?.length">
@@ -70,7 +86,15 @@
             @click="goToRelatedNews(item.id)"
           >
             <div class="related-image">
-              <img :src="item.image" :alt="item.title" @error="onImageError">
+              <img
+                :src="item.image"
+                :alt="item.title"
+                width="80"
+                height="60"
+                loading="lazy"
+                decoding="async"
+                @error="onImageError"
+              >
             </div>
             <div class="related-title">{{ item.title }}</div>
           </div>
@@ -424,7 +448,7 @@ const loadComments = async (reset = false) => {
 
   commentLoading.value = true
   try {
-    const res = await http.get('/api/comment/list', {
+    const res = await http.get('/api/comment', {
       params: {
         newsId: newsId.value,
         page: commentPage.value,
@@ -463,7 +487,7 @@ const submitComment = async () => {
       payload.parentId = replyTarget.value.id
     }
 
-    await http.post('/api/comment/add', payload)
+    await http.post('/api/comment', payload)
     commentText.value = ''
     replyTarget.value = null
     showToast('评论成功')
@@ -510,12 +534,16 @@ watch(newsId, (newId, oldId) => {
 
 <style scoped>
 .news-detail {
-  padding-top: 46px;
-  background-color: #fff;
   min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: var(--nav-height);
+  background-color: var(--surface-color);
+  color: var(--text-color);
 }
 
 .detail-content {
+  width: min(100%, 720px);
+  margin: 0 auto;
   padding: 16px;
 }
 
@@ -523,21 +551,25 @@ watch(newsId, (newId, oldId) => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
 .title {
-  font-size: 22px;
-  font-weight: bold;
-  line-height: 1.4;
-  margin: 0;
   flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-color);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .favorite-btn {
+  width: 44px;
+  height: 44px;
   padding: 0;
-  width: 36px;
-  height: 36px;
   border-radius: 50%;
 }
 
@@ -547,28 +579,32 @@ watch(newsId, (newId, oldId) => {
 
 .info {
   display: flex;
-  font-size: 12px;
-  color: #999;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   margin-bottom: 16px;
-}
-
-.info span {
-  margin-right: 12px;
+  color: var(--text-color-lighter);
+  font-size: 12px;
 }
 
 .cover {
   margin-bottom: 16px;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: var(--surface-muted);
+  aspect-ratio: 16 / 9;
 }
 
 .cover img {
+  display: block;
   width: 100%;
-  border-radius: 4px;
+  height: 100%;
+  object-fit: cover;
 }
 
 .content {
+  color: var(--text-color);
   font-size: 16px;
   line-height: 1.8;
-  color: #333;
 }
 
 .content p {
@@ -632,9 +668,13 @@ watch(newsId, (newId, oldId) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  color: #646566;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-color-light);
+  cursor: pointer;
   transition: color 0.2s;
 }
 
@@ -649,19 +689,20 @@ watch(newsId, (newId, oldId) => {
 }
 
 .follow-author-btn {
+  min-width: 72px;
+  height: 36px;
   padding: 0 10px;
-  height: 32px;
-  line-height: 30px;
-  border: 1px solid #1989fa;
+  border: 1px solid var(--primary-color);
   border-radius: 999px;
+  background-color: var(--surface-color);
+  color: var(--primary-color);
   font-size: 12px;
-  color: #1989fa;
-  background-color: #fff;
+  cursor: pointer;
 }
 
 .follow-author-btn.is-following {
-  border-color: #c8c9cc;
-  color: #969799;
+  border-color: var(--border-color);
+  color: var(--text-color-lighter);
 }
 
 /* ---------------------------- 评论 ---------------------------- */
@@ -751,11 +792,14 @@ watch(newsId, (newId, oldId) => {
 }
 
 .tag-item {
+  min-height: 32px;
   padding: 4px 10px;
-  font-size: 12px;
-  color: #1989fa;
-  background-color: #f2f8ff;
+  border: 0;
   border-radius: 12px;
+  background-color: #f2f8ff;
+  color: var(--primary-color);
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .comment-field {
@@ -819,6 +863,25 @@ watch(newsId, (newId, oldId) => {
 }
 
 .comment-end {
-  color: #c8c9cc;
+  color: var(--text-color-lighter);
+}
+
+@media (max-width: 480px) {
+  .title-container {
+    flex-direction: column;
+  }
+
+  .title-actions {
+    margin: 0 0 0 -4px;
+  }
+
+  .comment-meta {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .comment-actions {
+    margin-left: 0;
+  }
 }
 </style>

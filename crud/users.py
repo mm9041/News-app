@@ -2,7 +2,6 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 
-from fastapi import HTTPException
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,9 +28,10 @@ async def get_user_by_username(db: AsyncSession, username: str):
 
 
 async def create_user(db: AsyncSession, user_data: UserRegisterRequest):
+    """只 flush 不提交：注册时用户与令牌必须同一事务落库（见 register 路由）。"""
     user = User(username=user_data.username, password=security.get_hash_password(user_data.password))
     db.add(user)
-    await db.commit()
+    await db.flush()
     await db.refresh(user)
     return user
 
@@ -41,6 +41,8 @@ async def create_token(db: AsyncSession, user_id: int):
 
     secrets.token_urlsafe(32) 约 256 bit 熵，比 uuid4 的 122 bit 更稳；
     每用户只保留一条，重新登录会让旧 token 立即失效（多端会互相顶掉）。
+
+    只 flush 不提交：由登录 / 注册路由在同一事务里统一提交。
     """
     token = secrets.token_urlsafe(32)
     expires_at = datetime.now() + timedelta(days=7)
@@ -54,7 +56,7 @@ async def create_token(db: AsyncSession, user_id: int):
     else:
         user_token = UserToken(user_id=user_id, token=token_hash, expires_at=expires_at)
         db.add(user_token)
-    await db.commit()
+    await db.flush()
     await db.refresh(user_token)
     return token
 
@@ -95,15 +97,17 @@ async def delete_token(db: AsyncSession, token: str) -> bool:
 
 
 async def update_user(db: AsyncSession, username: str, user_data: UserUpdateRequest):
-    query = update(User).where(User.username == username).values(**user_data.model_dump(
-        exclude_unset=True,
-        exclude_none=True
-    ))
+    query = (
+        update(User)
+        .where(User.username == username)
+        .values(**user_data.model_dump(exclude_unset=True, exclude_none=True))
+    )
     result = await db.execute(query)
     await db.commit()
 
+    # 不存在就返回 None，由路由层抛 404：CRUD 层不关心 HTTP 语义
     if result.rowcount == 0:
-        raise HTTPException(404, "用户不存在")
+        return None
     updated_user = await get_user_by_username(db, username)
     return updated_user
 
@@ -113,14 +117,9 @@ async def list_users_for_admin(db: AsyncSession, keyword: str | None, skip: int,
     conditions = []
     if keyword and keyword.strip():
         kw = keyword.strip()
-        conditions.append(
-            User.username.contains(kw, autoescape=True)
-            | User.nickname.contains(kw, autoescape=True)
-        )
+        conditions.append(User.username.contains(kw, autoescape=True) | User.nickname.contains(kw, autoescape=True))
 
-    total = (
-        await db.execute(select(func.count(User.id)).where(*conditions))
-    ).scalar_one()
+    total = (await db.execute(select(func.count(User.id)).where(*conditions))).scalar_one()
 
     stmt = (
         select(User, func.count(NewsComment.id))

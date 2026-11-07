@@ -89,7 +89,7 @@ const load = async (reset = false) => {
   fetching = true
   loading.value = true
   try {
-    const res = await http.get('/api/notification/list', {
+    const res = await http.get('/api/notification', {
       params: { page: page.value, pageSize: PAGE_SIZE }
     })
     const data = res.data?.data || {}

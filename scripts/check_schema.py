@@ -25,7 +25,20 @@ from sqlalchemy import create_engine, inspect
 load_dotenv(BASE_DIR / ".env", override=False)
 
 # 必须把所有模型都导入进来，Base.metadata 才知道有哪些表
-from models import ai_chat, ai_conversation, comment, favorite, follow, history, like, news, notification, source, tag, users  # noqa: F401
+from models import (  # noqa: F401
+    ai_chat,
+    ai_conversation,
+    comment,
+    favorite,
+    follow,
+    history,
+    like,
+    news,
+    notification,
+    source,
+    tag,
+    users,
+)
 from models.base import Base
 
 
@@ -67,11 +80,9 @@ def main() -> int:
             orm_unsigned = bool(getattr(orm_cols[col].type, "unsigned", False))
             db_unsigned = bool(getattr(db_cols[col]["type"], "unsigned", False))
             if orm_unsigned != db_unsigned:
-                flag = lambda v: "UNSIGNED" if v else "有符号"
-                problems.append(
-                    f"[类型] {name}.{col}：模型 {flag(orm_unsigned)}，库 {flag(db_unsigned)}"
-                    f"（{db_cols[col]['type']!r}）"
-                )
+                orm_flag = "UNSIGNED" if orm_unsigned else "有符号"
+                db_flag = "UNSIGNED" if db_unsigned else "有符号"
+                problems.append(f"[类型] {name}.{col}：模型 {orm_flag}，库 {db_flag}（{db_cols[col]['type']!r}）")
 
         db_indexes = {idx["name"] for idx in insp.get_indexes(name) if idx["name"]}
         db_indexes |= {con["name"] for con in insp.get_unique_constraints(name) if con["name"]}

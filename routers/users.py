@@ -1,20 +1,17 @@
-from typing import Optional
-
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request
-from fastapi import status
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.db_conf import get_database
 from crud import users
-from crud.users import create_user, get_user_by_username, create_token, update_user
+from crud.users import create_token, create_user, get_user_by_username, update_user
 from models.users import User
 from schemas.users import (
+    UserAuthResponse,
+    UserChangePasswordRequest,
+    UserInfoResponse,
     UserRegisterRequest,
     UserRequest,
-    UserAuthResponse,
-    UserInfoResponse,
     UserUpdateRequest,
-    UserChangePasswordRequest,
 )
 from utils.auth import (
     TOKEN_COOKIE_NAME,
@@ -37,6 +34,8 @@ async def register(user_data: UserRegisterRequest, request: Request, db: AsyncSe
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户已存在")
     user = await create_user(db, user_data)
     token = await create_token(db, user.id)
+    # 用户和令牌必须一起落库：token 写失败时回滚用户，否则该用户名会永久卡死
+    await db.commit()
     response_data = UserAuthResponse(token=token, userInfo=UserInfoResponse.model_validate(user))
     response = success_response(data=response_data, message="注册成功")
     # 同时下发 httpOnly cookie：浏览器后续请求自动带上，前端不用碰 token
@@ -55,6 +54,7 @@ async def login(user_data: UserRequest, request: Request, db: AsyncSession = Dep
         # 被管理员禁用的账号：不是密码错，别引导用户去改密码
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已被禁用，请联系管理员")
     token = await create_token(db, user.id)
+    await db.commit()
     response_data = UserAuthResponse(token=token, userInfo=UserInfoResponse.model_validate(user))
     response = success_response(data=response_data, message="登录成功")
     set_token_cookie(response, token)
@@ -63,9 +63,9 @@ async def login(user_data: UserRequest, request: Request, db: AsyncSession = Dep
 
 @router.post("/logout")
 async def logout(
-        authorization: Optional[str] = Header(None, alias="Authorization"),
-        access_token: Optional[str] = Cookie(None, alias=TOKEN_COOKIE_NAME),
-        db: AsyncSession = Depends(get_database),
+    authorization: str | None = Header(None, alias="Authorization"),
+    access_token: str | None = Cookie(None, alias=TOKEN_COOKIE_NAME),
+    db: AsyncSession = Depends(get_database),
 ):
     """退出登录：删掉库里的 token 行 + 清 cookie。
 
@@ -80,23 +80,27 @@ async def logout(
     return response
 
 
-@router.get("/info")
+@router.get("/me")
 async def get_user_info(user: User = Depends(get_current_user)):
     return success_response(data=UserInfoResponse.model_validate(user), message="获取用户信息成功")
 
 
-@router.put("/update")
-async def update_user_info(user_data: UserUpdateRequest, user: User = Depends(get_current_user),
-                           db: AsyncSession = Depends(get_database)):
-    user = await update_user(db, user.username, user_data)
-    return success_response(data=UserInfoResponse.model_validate(user), message="更新用户信息成功")
+@router.patch("")
+async def update_user_info(
+    user_data: UserUpdateRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)
+):
+    updated = await update_user(db, user.username, user_data)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    return success_response(data=UserInfoResponse.model_validate(updated), message="更新用户信息成功")
 
 
 @router.put("/password")
 async def update_password(
-        password_data: UserChangePasswordRequest,
-        user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database)):
+    password_data: UserChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
+):
     # 防止拿着已泄露的 token 反复试旧密码
     await enforce(f"pwd:{user.id}", 5, 60, "操作过于频繁，请 1 分钟后再试")
     res_change_pwd = await users.change_password(db, user, password_data.old_password, password_data.new_password)

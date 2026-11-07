@@ -1,11 +1,11 @@
 from datetime import datetime
-from typing import Optional
 
-from sqlalchemy import Integer, String, Index, ForeignKey, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.mysql import TIMESTAMP
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, TimestampMixin, UnsignedInt
+
 # news.source_id 的 ForeignKey 指向 source 表：必须让 SQLAlchemy 的 metadata
 # 看到这张表，否则 News 的任何 flush 都会报 NoReferencedTableError
 from models.source import Source  # noqa: F401
@@ -39,8 +39,7 @@ class News(Base, TimestampMixin):
         Index("idx_category_publish", "category_id", "publish_time", "id"),
         # 中文全文检索：ngram 分词器（MySQL 8 内置）。
         # ngram_token_size 默认 2，单字关键词 MATCH 不到，应用层会回退 LIKE。
-        Index("ft_news_search", "title", "description", "content",
-              mysql_prefix="FULLTEXT", mysql_with_parser="ngram"),
+        Index("ft_news_search", "title", "description", "content", mysql_prefix="FULLTEXT", mysql_with_parser="ngram"),
         # 发布者：后台创建新闻时记当前管理员，用来给「我的新闻被评论/点赞」发通知。
         # 历史种子数据这一列是 NULL，不会产生通知。
         Index("fk_news_user_idx", "user_id"),
@@ -49,16 +48,18 @@ class News(Base, TimestampMixin):
     )
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="新闻ID")
     title: Mapped[str] = mapped_column(String(255), nullable=False, comment="新闻标题")
-    description: Mapped[Optional[str]] = mapped_column(String(500), comment="新闻简介")
+    description: Mapped[str | None] = mapped_column(String(500), comment="新闻简介")
     content: Mapped[str] = mapped_column(Text, nullable=False, comment="新闻内容")
-    image: Mapped[Optional[str]] = mapped_column(String(255), comment="封面图片URL")
-    author: Mapped[Optional[str]] = mapped_column(String(50), comment="作者")
+    image: Mapped[str | None] = mapped_column(String(255), comment="封面图片URL")
+    author: Mapped[str | None] = mapped_column(String(50), comment="作者")
     # 报纸来源：作者是一篇的署名，报纸是一批新闻的出处；关注报纸能看到关注流
-    source_id: Mapped[Optional[int]] = mapped_column(
+    source_id: Mapped[int | None] = mapped_column(
         UnsignedInt, ForeignKey("source.id", ondelete="SET NULL"), nullable=True, comment="报纸来源ID"
     )
-    category_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("news_category.id"), nullable=False, comment="分类ID")
-    user_id: Mapped[Optional[int]] = mapped_column(
+    category_id: Mapped[int] = mapped_column(
+        UnsignedInt, ForeignKey("news_category.id"), nullable=False, comment="分类ID"
+    )
+    user_id: Mapped[int | None] = mapped_column(
         UnsignedInt, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, comment="发布者ID"
     )
     views: Mapped[int] = mapped_column(UnsignedInt, default=0, nullable=False, comment="浏览量")

@@ -121,33 +121,33 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
 | GET | `/api/news/categories` | 否 | 分类列表（缓存 2h） |
-| GET | `/api/news/list?categoryId&page&pageSize` | 否 | 列表，按发布时间倒序 |
+| GET | `/api/news?categoryId&page&pageSize` | 否 | 列表，按发布时间倒序 |
 | GET | `/api/news/search?keyword&page&pageSize` | 否 | 全文搜索（标题/摘要/正文） |
 | GET | `/api/news/suggest?keyword` | 否 | 搜索联想（标题前缀，最多 10 条） |
-| GET | `/api/news/detail?id` | 否 | 详情 + 相关推荐 + 点赞状态，并把阅读量 +1 |
+| GET | `/api/news/{id}` | 否 | 详情 + 相关推荐 + 点赞状态，并把阅读量 +1 |
 | GET | `/api/news/recommend?limit` | 否 | 猜你喜欢；登录后按兴趣推荐，游客给热门 |
 | PUT | `/api/news/{news_id}/like` | 是 | 点赞（幂等） |
 | DELETE | `/api/news/{news_id}/like` | 是 | 取消点赞（幂等） |
-| GET | `/api/comment/list?newsId&page&pageSize` | 否 | 一级评论分页，每条带出回复 |
-| POST | `/api/comment/add` | 是 | 发表评论 / 回复（传 `parentId`） |
+| GET | `/api/comment?newsId&page&pageSize` | 否 | 一级评论分页，每条带出回复 |
+| POST | `/api/comment` | 是 | 发表评论 / 回复（传 `parentId`） |
 | DELETE | `/api/comment/{comment_id}` | 是 | 删除评论（本人或管理员，级联删回复） |
 | GET | `/api/tag/hot?limit` | 否 | 标签墙（按引用次数） |
 | GET | `/api/tag/{tag_id}/news?page` | 否 | 某标签下的新闻 |
 | GET | `/api/source/{source_id}/news?page` | 否 | 某报纸来源下的新闻 |
 | GET/POST/DELETE | `/api/follow*` | 部分 | 关注作者：关注/取关/状态/我关注的作者（需登录）、作者新闻（公开） |
 | POST | `/api/upload/image` | 是 | 上传图片（≤5MB，JPG/PNG/GIF/WebP） |
-| GET | `/api/notification/list?page&pageSize` | 是 | 通知列表，附带未读数 |
+| GET | `/api/notification?page&pageSize` | 是 | 通知列表，附带未读数 |
 | GET | `/api/notification/unread-count` | 是 | 未读数 |
 | PUT | `/api/notification/{notification_id}/read` | 是 | 单条标记已读 |
 | PUT | `/api/notification/read-all` | 是 | 全部已读 |
 | POST | `/api/user/register` | 否 | 注册（限 5 次/分/IP） |
 | POST | `/api/user/login` | 否 | 登录（限 10 次/分/IP） |
-| GET | `/api/user/info` | 是 | 当前用户 |
-| PUT | `/api/user/update` | 是 | 改昵称/头像/简介 |
+| GET | `/api/user/me` | 是 | 当前用户 |
+| PATCH | `/api/user` | 是 | 改昵称/头像/简介 |
 | PUT | `/api/user/password` | 是 | 改密码（限 5 次/分） |
 | POST | `/api/user/logout` | 否 | 退出：删除库里的 token 行 + 清 cookie |
-| GET/POST/DELETE | `/api/favorite/*` | 是 | 收藏检查/增删/列表/清空 |
-| GET/POST/DELETE | `/api/history/*` | 是 | 历史增删/列表/清空 |
+| GET/POST/DELETE | `/api/favorite[/{newsId}]` | 是 | 收藏检查/增删/列表/清空 |
+| GET/POST/DELETE | `/api/history[/{newsId}]` | 是 | 历史增删/列表/清空 |
 | POST | `/api/ai/chat` | 是 | AI 对话（SSE），限 20 次/分 |
 | GET | `/api/ai/history?page&pageSize` | 是 | 聊天记录（倒序） |
 | POST | `/api/ai/conversations` | 是 | 新建会话 |

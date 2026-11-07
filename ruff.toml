@@ -1,0 +1,30 @@
+# 代码风格与静态检查。
+# 本地修复：python -m ruff check . --fix && python -m ruff format .
+# CI 守护：ruff check . && ruff format --check .
+
+target-version = "py312"
+# 与现有代码风格一致（多数文件在 100~120 列）
+line-length = 120
+
+[lint]
+# 只开安全规则：pycodestyle 错误、pyflakes、警告、import 排序、pyupgrade
+select = ["E", "F", "W", "I", "UP"]
+
+[lint.isort]
+known-first-party = [
+    "cache",
+    "config",
+    "crud",
+    "models",
+    "routers",
+    "schemas",
+    "scripts",
+    "tests",
+    "utils",
+]
+
+[lint.per-file-ignores]
+# 脚本需要先改 sys.path 再 import 项目模块，E402 属预期
+"scripts/*.py" = ["E402"]
+# Alembic 生成的迁移文件固定带 op/sa 导入，不动生成物
+"migrations/**" = ["F401"]

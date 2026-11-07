@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from cache import view_counter
 from config.db_conf import AsyncSessionLocal
 from crud.news_views import flush_view_deltas
-from routers import follow, news, users, favorite, history, ai, admin, comment, upload, notification, tag, source
+from routers import admin, ai, comment, favorite, follow, history, news, notification, source, tag, upload, users
 from utils.exception_handlers import register_exception_handlers
 from utils.logger import get_logger, setup_logging
 from utils.metrics import MetricsMiddleware, render_metrics
@@ -97,7 +97,7 @@ app.add_middleware(
     allow_origins=_allowed_origins(),
     # 登录 token 走 httpOnly cookie，跨域请求需要带上凭证。
     # allow_origins 必须是显式白名单（上面已经收紧），不能用 "*"。
-    allow_credentials=True,
+    allow_credentials=True,  # 允许浏览器在跨域请求中携带凭证（Cookie、Authorization 头等），并允许前端读取带凭证的响应
     allow_methods=["*"],
     allow_headers=["*"],
     # 必须显式暴露自定义响应头，否则跨域时 fetch 读不到它：
@@ -127,6 +127,7 @@ app.include_router(source.router)
 
 
 # ---------------------------- 可观测性 ----------------------------
+
 
 @app.get("/health")
 async def health(strict: bool = Query(False, description="严格模式：Redis 不可用也算失败")):

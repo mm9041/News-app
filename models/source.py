@@ -1,8 +1,8 @@
 from datetime import datetime
 
 from sqlalchemy import String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.mysql import TIMESTAMP
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, UnsignedInt
 
@@ -13,6 +13,7 @@ class Source(Base):
     新闻的「来源」和「作者」是两个维度：作者是一篇的署名，报纸是一批新闻的出处。
     关注报纸能看到它下面所有新闻的关注流，所以单独建表而不是用字符串。
     """
+
     __tablename__ = "source"
 
     __table_args__ = (

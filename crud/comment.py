@@ -4,8 +4,6 @@
 「回复给谁」单独记在 `reply_to_user_id`，这样渲染时不会出现无限嵌套。
 """
 
-from typing import Optional
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -22,9 +20,7 @@ async def list_comments(db: AsyncSession, news_id: int, skip: int, limit: int):
     """
     total = (
         await db.execute(
-            select(func.count(NewsComment.id)).where(
-                NewsComment.news_id == news_id, NewsComment.parent_id.is_(None)
-            )
+            select(func.count(NewsComment.id)).where(NewsComment.news_id == news_id, NewsComment.parent_id.is_(None))
         )
     ).scalar_one()
 
@@ -58,20 +54,18 @@ async def list_comments(db: AsyncSession, news_id: int, skip: int, limit: int):
 
     replies_map: dict[int, list] = {}
     for comment, reply_author, rt_nickname, rt_username in (await db.execute(replies_stmt)).all():
-        replies_map.setdefault(comment.parent_id, []).append(
-            (comment, reply_author, rt_nickname or rt_username)
-        )
+        replies_map.setdefault(comment.parent_id, []).append((comment, reply_author, rt_nickname or rt_username))
 
     return roots, replies_map, total
 
 
 async def add_comment(
-        db: AsyncSession,
-        news_id: int,
-        user_id: int,
-        content: str,
-        parent_id: Optional[int] = None,
-        reply_to_user_id: Optional[int] = None,
+    db: AsyncSession,
+    news_id: int,
+    user_id: int,
+    content: str,
+    parent_id: int | None = None,
+    reply_to_user_id: int | None = None,
 ) -> NewsComment:
     comment = NewsComment(
         news_id=news_id,

@@ -1,7 +1,6 @@
 """通知的请求/响应模型。"""
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -9,8 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class NotificationActor(BaseModel):
     id: int
     username: str
-    nickname: Optional[str] = None
-    avatar: Optional[str] = None
+    nickname: str | None = None
+    avatar: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -22,7 +21,7 @@ class NotificationItemResponse(BaseModel):
     news_id: int = Field(alias="newsId")
     news_title: str = Field(alias="newsTitle")
     # 评论类通知才有，截断到 60 字方便列表展示
-    comment_preview: Optional[str] = Field(None, alias="commentPreview")
+    comment_preview: str | None = Field(None, alias="commentPreview")
     is_read: bool = Field(alias="isRead")
     created_at: datetime = Field(alias="createdAt")
     actor: NotificationActor

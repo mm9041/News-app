@@ -26,10 +26,7 @@ async def get_or_create_tags(db: AsyncSession, names: list[str]) -> list[int]:
         return []
 
     existing = {
-        row[0]: row[1]
-        for row in (
-            await db.execute(select(Tag.name, Tag.id).where(Tag.name.in_(cleaned)))
-        ).all()
+        row[0]: row[1] for row in (await db.execute(select(Tag.name, Tag.id).where(Tag.name.in_(cleaned)))).all()
     }
 
     missing = [name for name in cleaned if name not in existing]
@@ -38,10 +35,7 @@ async def get_or_create_tags(db: AsyncSession, names: list[str]) -> list[int]:
     if missing:
         await db.commit()
         existing = {
-            row[0]: row[1]
-            for row in (
-                await db.execute(select(Tag.name, Tag.id).where(Tag.name.in_(cleaned)))
-            ).all()
+            row[0]: row[1] for row in (await db.execute(select(Tag.name, Tag.id).where(Tag.name.in_(cleaned)))).all()
         }
 
     return [existing[name] for name in cleaned if name in existing]
@@ -52,30 +46,21 @@ async def set_news_tags(db: AsyncSession, news_id: int, names: list[str]) -> Non
     tag_ids = await get_or_create_tags(db, names)
     await db.execute(delete(NewsTag).where(NewsTag.news_id == news_id))
     for tag_id in tag_ids:
-        await db.execute(
-            insert(NewsTag).values(news_id=news_id, tag_id=tag_id).prefix_with("IGNORE")
-        )
+        await db.execute(insert(NewsTag).values(news_id=news_id, tag_id=tag_id).prefix_with("IGNORE"))
     await db.commit()
 
 
 async def list_news_tags(db: AsyncSession, news_id: int) -> list[Tag]:
     """返回 Tag 对象（带 id，前端才能点进标签页）。"""
     rows = await db.execute(
-        select(Tag)
-        .join(NewsTag, NewsTag.tag_id == Tag.id)
-        .where(NewsTag.news_id == news_id)
-        .order_by(Tag.id.asc())
+        select(Tag).join(NewsTag, NewsTag.tag_id == Tag.id).where(NewsTag.news_id == news_id).order_by(Tag.id.asc())
     )
     return list(rows.scalars().all())
 
 
 async def list_by_tag(db: AsyncSession, tag_id: int, skip: int, limit: int):
     """某个标签下的新闻，按发布时间倒序。"""
-    total = (
-        await db.execute(
-            select(func.count(NewsTag.id)).where(NewsTag.tag_id == tag_id)
-        )
-    ).scalar_one()
+    total = (await db.execute(select(func.count(NewsTag.id)).where(NewsTag.tag_id == tag_id))).scalar_one()
 
     if not total:
         return [], 0

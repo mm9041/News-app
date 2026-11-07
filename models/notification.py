@@ -1,9 +1,8 @@
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, ForeignKey, Index, String
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.mysql import TIMESTAMP
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, UnsignedInt
 
@@ -17,6 +16,7 @@ class Notification(Base):
     接收者是新闻的 `user_id`（发布者）。历史种子新闻没有发布者，
     所以对它们的互动不会产生通知 —— 这是数据决定的，不是逻辑漏了。
     """
+
     __tablename__ = "notification"
 
     __table_args__ = (
@@ -32,7 +32,7 @@ class Notification(Base):
     actor_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("user.id"), nullable=False, comment="触发者ID")
     type: Mapped[str] = mapped_column(String(20), nullable=False, comment="类型：comment / like")
     news_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("news.id"), nullable=False, comment="相关新闻ID")
-    comment_id: Mapped[Optional[int]] = mapped_column(
+    comment_id: Mapped[int | None] = mapped_column(
         UnsignedInt, ForeignKey("news_comment.id", ondelete="SET NULL"), nullable=True, comment="相关评论ID"
     )
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否已读")

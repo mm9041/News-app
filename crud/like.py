@@ -12,24 +12,18 @@ from models.like import NewsLike
 
 
 async def count_likes(db: AsyncSession, news_id: int) -> int:
-    return (
-        await db.execute(select(func.count(NewsLike.id)).where(NewsLike.news_id == news_id))
-    ).scalar_one()
+    return (await db.execute(select(func.count(NewsLike.id)).where(NewsLike.news_id == news_id))).scalar_one()
 
 
 async def is_liked(db: AsyncSession, news_id: int, user_id: int) -> bool:
-    result = await db.execute(
-        select(NewsLike.id).where(NewsLike.news_id == news_id, NewsLike.user_id == user_id)
-    )
+    result = await db.execute(select(NewsLike.id).where(NewsLike.news_id == news_id, NewsLike.user_id == user_id))
     return result.scalar_one_or_none() is not None
 
 
 async def like(db: AsyncSession, news_id: int, user_id: int) -> bool:
     """点赞。返回 True 表示这次是新增，False 表示之前已经赞过。"""
     stmt = (
-        insert(NewsLike)
-        .values(news_id=news_id, user_id=user_id)
-        .prefix_with("IGNORE")  # 命中唯一索引时静默跳过
+        insert(NewsLike).values(news_id=news_id, user_id=user_id).prefix_with("IGNORE")  # 命中唯一索引时静默跳过
     )
     result = await db.execute(stmt)
     await db.commit()
@@ -38,8 +32,6 @@ async def like(db: AsyncSession, news_id: int, user_id: int) -> bool:
 
 async def unlike(db: AsyncSession, news_id: int, user_id: int) -> bool:
     """取消点赞。返回 True 表示确实删掉了一条。"""
-    result = await db.execute(
-        delete(NewsLike).where(NewsLike.news_id == news_id, NewsLike.user_id == user_id)
-    )
+    result = await db.execute(delete(NewsLike).where(NewsLike.news_id == news_id, NewsLike.user_id == user_id))
     await db.commit()
     return result.rowcount > 0

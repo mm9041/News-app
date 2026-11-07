@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
@@ -6,17 +6,18 @@ from config.db_conf import get_database
 from crud import history
 from crud.news_cache import news_exists
 from models.users import User
-from schemas.history import HistoryAddRequest, HistoryNewsItemResponse, HistoryListResponse
+from schemas.history import HistoryAddRequest, HistoryListResponse, HistoryNewsItemResponse
 from utils.auth import get_current_user
+from utils.pagination import MAX_PAGE_SIZE, calc_has_more
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 
 
-@router.post("/add")
-async def add_history(data: HistoryAddRequest,
-                      user: User = Depends(get_current_user),
-                      db: AsyncSession = Depends(get_database)):
+@router.post("")
+async def add_history(
+    data: HistoryAddRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)
+):
     """
     添加历史记录
     """
@@ -28,17 +29,17 @@ async def add_history(data: HistoryAddRequest,
     return success_response(message="添加成功", data=result)
 
 
-@router.get("/list")
-async def get_history_list(page: int = Query(1, ge=1),
-                           page_size: int = Query(10, ge=1, le=100, alias="pageSize"),
-                           user: User = Depends(get_current_user),
-                           db: AsyncSession = Depends(get_database)):
+@router.get("")
+async def get_history_list(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
+):
     """
     获取历史记录列表
     """
     rows, total = await history.get_history_list(db, user.id, page, page_size)
-
-    has_more = total > page * page_size
 
     # 显式挑字段，不要 `{**news.__dict__}`：那会把 _sa_instance_state
     # 这类 ORM 内部状态一起带进去，靠 Pydantic 忽略私有键才没出事。
@@ -58,15 +59,19 @@ async def get_history_list(page: int = Query(1, ge=1),
         for news, view_time, history_id in rows
     ]
 
-    data = HistoryListResponse(list=history_list, total=total, hasMore=has_more)
+    data = HistoryListResponse(
+        list=history_list,
+        total=total,
+        has_more=calc_has_more(total, (page - 1) * page_size, len(history_list)),
+    )
 
     return success_response(data=data)
 
 
-@router.delete("/delete/{news_id}")
-async def delete_history(news_id: int,
-                         user: User = Depends(get_current_user),
-                         db: AsyncSession = Depends(get_database)):
+@router.delete("/{news_id}")
+async def delete_history(
+    news_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)
+):
     """删除某条新闻的浏览历史。
 
     ⚠️ 路径参数是**新闻 id**，不是 history 表的主键 —— 前端 `History.vue`
@@ -79,9 +84,8 @@ async def delete_history(news_id: int,
     return success_response(message="删除成功")
 
 
-@router.delete("/clear")
-async def clear_history(user: User = Depends(get_current_user),
-                        db: AsyncSession = Depends(get_database)):
+@router.delete("")
+async def clear_history(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)):
     """
     清空历史记录
     """

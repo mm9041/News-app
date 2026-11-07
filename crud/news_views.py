@@ -58,9 +58,7 @@ async def flush_view_deltas(batch_size: int = 500) -> int:
     async with AsyncSessionLocal() as db:
         try:
             for news_id, delta in snapshot.items():
-                await db.execute(
-                    update(News).where(News.id == news_id).values(views=News.views + delta)
-                )
+                await db.execute(update(News).where(News.id == news_id).values(views=News.views + delta))
             await db.commit()
         except Exception:
             await db.rollback()

@@ -1,9 +1,8 @@
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import ForeignKey, Index, Text
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.mysql import TIMESTAMP
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, UnsignedInt
 
@@ -20,6 +19,7 @@ class AiChat(Base):
     `conversation_id` 是后加的：早期数据没有会话概念，迁移脚本按 30 分钟窗口
     给它们补了会话（见 scripts/migrate_ai_conversations.py）。
     """
+
     __tablename__ = "ai_chat"
 
     __table_args__ = (
@@ -33,7 +33,7 @@ class AiChat(Base):
 
     id: Mapped[int] = mapped_column(UnsignedInt, primary_key=True, autoincrement=True, comment="聊天记录ID")
     user_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("user.id"), nullable=False, comment="用户ID")
-    conversation_id: Mapped[Optional[int]] = mapped_column(
+    conversation_id: Mapped[int | None] = mapped_column(
         UnsignedInt, ForeignKey("ai_conversation.id", ondelete="CASCADE"), nullable=True, comment="所属会话ID"
     )
     message: Mapped[str] = mapped_column(Text, nullable=False, comment="用户消息")

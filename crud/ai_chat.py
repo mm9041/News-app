@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,11 +23,11 @@ def truncate_by_bytes(text: str, max_bytes: int = MAX_TEXT_BYTES) -> str:
 
 
 async def save_chat(
-        db: AsyncSession,
-        user_id: int,
-        message: str,
-        response: str,
-        conversation_id: Optional[int] = None,
+    db: AsyncSession,
+    user_id: int,
+    message: str,
+    response: str,
+    conversation_id: int | None = None,
 ) -> AiChat:
     """存一轮问答：用户问的进 message，AI 答的进 response。"""
     record = AiChat(
@@ -58,9 +57,7 @@ async def create_conversation(db: AsyncSession, user_id: int, title: str) -> AiC
 async def get_conversation(db: AsyncSession, conversation_id: int, user_id: int) -> AiConversation | None:
     """带 user_id 条件查，别人的会话查不到（也就无法越权）。"""
     result = await db.execute(
-        select(AiConversation).where(
-            AiConversation.id == conversation_id, AiConversation.user_id == user_id
-        )
+        select(AiConversation).where(AiConversation.id == conversation_id, AiConversation.user_id == user_id)
     )
     return result.scalar_one_or_none()
 
@@ -73,9 +70,7 @@ async def list_conversations(db: AsyncSession, user_id: int, skip: int, limit: i
         .where(AiConversation.user_id == user_id)
         .group_by(AiConversation.id)
     )
-    total = (
-        await db.execute(select(func.count()).select_from(joined.subquery()))
-    ).scalar_one()
+    total = (await db.execute(select(func.count()).select_from(joined.subquery()))).scalar_one()
 
     if not total:
         return [], 0
@@ -110,9 +105,7 @@ async def list_messages(db: AsyncSession, conversation_id: int) -> list[dict]:
 async def touch_conversation(db: AsyncSession, conversation_id: int) -> None:
     """手动更新活跃时间：插 ai_chat 不会触发本表的 ON UPDATE。"""
     await db.execute(
-        update(AiConversation)
-        .where(AiConversation.id == conversation_id)
-        .values(updated_at=datetime.now())
+        update(AiConversation).where(AiConversation.id == conversation_id).values(updated_at=datetime.now())
     )
     await db.commit()
 
@@ -132,9 +125,7 @@ async def get_chat_list(db: AsyncSession, user_id: int, page: int = 1, page_size
     排序带上 id 做次级键：created_at 是 TIMESTAMP（秒精度），同一秒内的两轮问答
     只按 created_at 排会得到不确定的顺序。
     """
-    count_result = await db.execute(
-        select(func.count(AiChat.id)).where(AiChat.user_id == user_id)
-    )
+    count_result = await db.execute(select(func.count(AiChat.id)).where(AiChat.user_id == user_id))
     total = count_result.scalar_one()
 
     offset = (page - 1) * page_size

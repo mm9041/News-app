@@ -20,9 +20,7 @@ def _auth(user):
 
 
 def test_favorite_add_missing_news_returns_404(client, temp_user):
-    resp = client.post(
-        "/api/favorite/add", json={"newsId": MISSING_NEWS_ID}, headers=_auth(temp_user)
-    )
+    resp = client.post("/api/favorite", json={"newsId": MISSING_NEWS_ID}, headers=_auth(temp_user))
     assert resp.status_code == 404
     assert "新闻" in resp.json()["message"]
 
@@ -30,25 +28,25 @@ def test_favorite_add_missing_news_returns_404(client, temp_user):
 def test_favorite_duplicate_message_is_about_favorite(client, temp_user):
     """重复收藏必须说「收藏过了」，不能说成「用户名已存在」。"""
     headers = _auth(temp_user)
-    client.delete("/api/favorite/remove", params={"newsId": NEWS_ID}, headers=headers)
+    client.delete(f"/api/favorite/{NEWS_ID}", headers=headers)
 
-    first = client.post("/api/favorite/add", json={"newsId": NEWS_ID}, headers=headers)
+    first = client.post("/api/favorite", json={"newsId": NEWS_ID}, headers=headers)
     assert first.status_code == 200
 
-    second = client.post("/api/favorite/add", json={"newsId": NEWS_ID}, headers=headers)
+    second = client.post("/api/favorite", json={"newsId": NEWS_ID}, headers=headers)
     assert second.status_code == 400
     message = second.json()["message"]
     assert "收藏" in message
     assert "用户名" not in message
 
-    client.delete("/api/favorite/remove", params={"newsId": NEWS_ID}, headers=headers)
+    client.delete(f"/api/favorite/{NEWS_ID}", headers=headers)
 
 
 def test_favorite_remove_is_idempotent(client, temp_user):
     """没收藏过也返回成功 —— 和点赞一样，弱网重试不该弹错。"""
     headers = _auth(temp_user)
     for _ in range(2):
-        resp = client.delete("/api/favorite/remove", params={"newsId": NEWS_ID}, headers=headers)
+        resp = client.delete(f"/api/favorite/{NEWS_ID}", headers=headers)
         assert resp.status_code == 200
         assert resp.json()["data"]["removed"] is False
 
@@ -56,10 +54,10 @@ def test_favorite_remove_is_idempotent(client, temp_user):
 def test_favorite_list_shape(client, temp_user):
     """列表项必须是 camelCase 契约，且不夹带 ORM 内部状态 / 正文。"""
     headers = _auth(temp_user)
-    client.post("/api/favorite/add", json={"newsId": NEWS_ID}, headers=headers)
+    client.post("/api/favorite", json={"newsId": NEWS_ID}, headers=headers)
 
     try:
-        data = client.get("/api/favorite/list", headers=headers).json()["data"]
+        data = client.get("/api/favorite", headers=headers).json()["data"]
         assert data["total"] == 1
         item = data["list"][0]
 
@@ -69,16 +67,14 @@ def test_favorite_list_shape(client, temp_user):
         assert "content" not in item
         assert "_sa_instance_state" not in item
     finally:
-        client.delete("/api/favorite/remove", params={"newsId": NEWS_ID}, headers=headers)
+        client.delete(f"/api/favorite/{NEWS_ID}", headers=headers)
 
 
 # ---------------------------------------------------------------- 浏览历史
 
 
 def test_history_add_missing_news_returns_404(client, temp_user):
-    resp = client.post(
-        "/api/history/add", json={"newsId": MISSING_NEWS_ID}, headers=_auth(temp_user)
-    )
+    resp = client.post("/api/history", json={"newsId": MISSING_NEWS_ID}, headers=_auth(temp_user))
     assert resp.status_code == 404
 
 
@@ -86,7 +82,7 @@ def test_history_add_is_idempotent(client, temp_user, db):
     """同一篇新闻看三次，库里只应留一条，且列表 total 是 1。"""
     headers = _auth(temp_user)
     for _ in range(3):
-        resp = client.post("/api/history/add", json={"newsId": NEWS_ID}, headers=headers)
+        resp = client.post("/api/history", json={"newsId": NEWS_ID}, headers=headers)
         assert resp.status_code == 200
 
     with db.cursor() as cur:
@@ -96,7 +92,7 @@ def test_history_add_is_idempotent(client, temp_user, db):
         )
         assert cur.fetchone()[0] == 1, "唯一索引 + upsert 应该只留一条"
 
-    data = client.get("/api/history/list", headers=headers).json()["data"]
+    data = client.get("/api/history", headers=headers).json()["data"]
     assert data["total"] == 1
     item = data["list"][0]
     assert "historyId" in item and "viewTime" in item
@@ -107,15 +103,12 @@ def test_history_add_is_idempotent(client, temp_user, db):
 def test_history_delete_takes_news_id(client, temp_user):
     """删除参数是新闻 id：删掉 A 不能连累 B。"""
     headers = _auth(temp_user)
-    client.post("/api/history/add", json={"newsId": NEWS_ID}, headers=headers)
-    client.post("/api/history/add", json={"newsId": OTHER_NEWS_ID}, headers=headers)
+    client.post("/api/history", json={"newsId": NEWS_ID}, headers=headers)
+    client.post("/api/history", json={"newsId": OTHER_NEWS_ID}, headers=headers)
 
-    resp = client.delete(f"/api/history/delete/{NEWS_ID}", headers=headers)
+    resp = client.delete(f"/api/history/{NEWS_ID}", headers=headers)
     assert resp.status_code == 200
 
-    ids = [
-        item["id"]
-        for item in client.get("/api/history/list", headers=headers).json()["data"]["list"]
-    ]
+    ids = [item["id"] for item in client.get("/api/history", headers=headers).json()["data"]["list"]]
     assert NEWS_ID not in ids
     assert OTHER_NEWS_ID in ids

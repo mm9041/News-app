@@ -103,7 +103,7 @@ export const useUserStore = defineStore('user', {
      */
     async restoreSession() {
       try {
-        const response = await http.get('/api/user/info', { skipAuthRedirect: true });
+        const response = await http.get('/api/user/me', { skipAuthRedirect: true });
         if (response.data?.code === 200) {
           this.userInfo = response.data.data;
           this.isLogin = true;
@@ -127,7 +127,7 @@ export const useUserStore = defineStore('user', {
         }
         
         // 发送获取用户信息请求
-        const response = await http.get('/api/user/info');
+        const response = await http.get('/api/user/me');
         
         // 检查响应状态
         if (response.data && response.data.code === 200) {
@@ -160,7 +160,7 @@ export const useUserStore = defineStore('user', {
         return { success: false, message: '未登录' };
       }
       try {
-        const response = await http.put('/api/user/update', profile);
+        const response = await http.patch('/api/user', profile);
         if (response.data && response.data.code === 200) {
           // 后端回的是完整用户信息，直接覆盖：昵称、头像、性别一次同步，
           // 评论列表下次加载时也会显示新昵称

@@ -14,9 +14,7 @@ async def get_source(db: AsyncSession, source_id: int) -> Source | None:
 
 async def list_news_by_source(db: AsyncSession, source_id: int, skip: int, limit: int):
     """某份报纸下的全部新闻，按发布时间倒序。"""
-    total = (
-        await db.execute(select(func.count(News.id)).where(News.source_id == source_id))
-    ).scalar_one()
+    total = (await db.execute(select(func.count(News.id)).where(News.source_id == source_id))).scalar_one()
 
     if not total:
         return [], 0

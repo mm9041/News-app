@@ -34,7 +34,7 @@ http.interceptors.response.use(
     if (status === 401) {
       onUnauthorized?.()
 
-      // 启动时探活 `/api/user/info` 本来就会 401（游客），
+      // 启动时探活 `/api/user/me` 本来就会 401（游客），
       // 这种请求自己带 skipAuthRedirect，别弹「登录已过期」、也别跳登录页。
       if (error.config?.skipAuthRedirect) {
         return Promise.reject(error)

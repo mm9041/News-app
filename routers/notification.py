@@ -16,17 +16,18 @@ from schemas.notification import (
     NotificationListResponse,
 )
 from utils.auth import get_current_user
+from utils.pagination import MAX_PAGE_SIZE, calc_has_more
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/notification", tags=["notification"])
 
 
-@router.get("/list")
+@router.get("")
 async def list_notifications(
-        page: int = Query(1, ge=1),
-        page_size: int = Query(10, ge=1, le=50, alias="pageSize"),
-        user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
 ):
     skip = (page - 1) * page_size
     rows, total = await notification_crud.list_for_user(db, user.id, skip, page_size)
@@ -50,15 +51,15 @@ async def list_notifications(
         list=items,
         total=total,
         unread=unread,
-        has_more=total > skip + len(items),
+        has_more=calc_has_more(total, skip, len(items)),
     )
     return success_response(data=data, message="获取通知成功")
 
 
 @router.get("/unread-count")
 async def unread_count(
-        user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
 ):
     count = await notification_crud.count_unread(db, user.id)
     return success_response(data={"count": count}, message="获取未读数成功")
@@ -66,8 +67,8 @@ async def unread_count(
 
 @router.put("/read-all")
 async def mark_all_read(
-        user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
 ):
     updated = await notification_crud.mark_all_read(db, user.id)
     return success_response(data={"updated": updated}, message="已全部标记为已读")
@@ -75,9 +76,9 @@ async def mark_all_read(
 
 @router.put("/{notification_id}/read")
 async def mark_read(
-        notification_id: int,
-        user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+    notification_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
 ):
     # 条件里带 user_id，别人的通知不会被误标
     updated = await notification_crud.mark_read(db, user.id, notification_id)

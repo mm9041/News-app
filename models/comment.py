@@ -1,9 +1,8 @@
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import ForeignKey, Index, String
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.mysql import TIMESTAMP
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, UnsignedInt
 
@@ -17,6 +16,7 @@ class NewsComment(Base):
     评论不支持编辑，也不做软删除：删除就是物理删除。
     新闻或用户被删时由外键 CASCADE 一起清掉。
     """
+
     __tablename__ = "news_comment"
 
     __table_args__ = (
@@ -35,12 +35,12 @@ class NewsComment(Base):
     user_id: Mapped[int] = mapped_column(UnsignedInt, ForeignKey("user.id"), nullable=False, comment="用户ID")
     # 只有两级：一级评论 parent_id 为空，回复指向所属的一级评论。
     # 回复不再被回复（前端拿 parentId 渲染缩进，但不再往下嵌套）。
-    parent_id: Mapped[Optional[int]] = mapped_column(
+    parent_id: Mapped[int | None] = mapped_column(
         UnsignedInt, ForeignKey("news_comment.id", ondelete="CASCADE"), nullable=True, comment="父评论ID"
     )
     # 回复某条回复时，parent_id 仍然指向所属的一级评论（避免多层嵌套），
     # 真正的「回复给谁」记在这里，用来显示「回复 @某某」。
-    reply_to_user_id: Mapped[Optional[int]] = mapped_column(
+    reply_to_user_id: Mapped[int | None] = mapped_column(
         UnsignedInt, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, comment="被回复的用户ID"
     )
     content: Mapped[str] = mapped_column(String(500), nullable=False, comment="评论内容")

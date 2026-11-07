@@ -1,8 +1,8 @@
 from datetime import datetime
 
 from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.mysql import TIMESTAMP
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, UnsignedInt
 
@@ -14,6 +14,7 @@ class Follow(Base):
     共用一张表比拆两张少一半的查询代码；代价是 target_id 不设外键，
     作者被删时读取方需要过滤不存在的目标。
     """
+
     __tablename__ = "follow"
 
     __table_args__ = (
@@ -32,7 +33,9 @@ class Follow(Base):
     # 作者是字符串（「海南日报」/「Dr. Chen」），target_type=author 时用这一列
     # NOT NULL DEFAULT ""（不是可选）：唯一索引必须包含这一列，
     # 而 MySQL 的唯一索引对 NULL 不去重，会让 user/category 的关注可以重复插入
-    target_name: Mapped[str] = mapped_column(String(50), nullable=False, default="", comment="作者名（target_type=author 时）")
+    target_name: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="", comment="作者名（target_type=author 时）"
+    )
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.now, nullable=False, comment="关注时间")
 
     def __repr__(self):

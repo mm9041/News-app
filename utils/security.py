@@ -11,9 +11,7 @@ def _to_bytes(password: str) -> bytes:
     """
     raw = password.encode("utf-8")
     if len(raw) > BCRYPT_MAX_BYTES:
-        raise ValueError(
-            f"密码过长：UTF-8 编码后 {len(raw)} 字节，上限 {BCRYPT_MAX_BYTES} 字节"
-        )
+        raise ValueError(f"密码过长：UTF-8 编码后 {len(raw)} 字节，上限 {BCRYPT_MAX_BYTES} 字节")
     return raw
 
 

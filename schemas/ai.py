@@ -4,7 +4,6 @@
 """
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,10 +16,7 @@ class AiChatItemResponse(BaseModel):
     response: str
     created_at: datetime = Field(alias="createdAt")
 
-    model_config = ConfigDict(
-        populate_by_name=True,
-        from_attributes=True
-    )
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 
 class AiChatListResponse(BaseModel):
@@ -30,14 +26,11 @@ class AiChatListResponse(BaseModel):
     total: int
     has_more: bool = Field(alias="hasMore")
 
-    model_config = ConfigDict(
-        populate_by_name=True,
-        from_attributes=True
-    )
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 
 class ConversationCreateRequest(BaseModel):
-    title: Optional[str] = Field(None, max_length=100, description="会话标题，默认取首条提问")
+    title: str | None = Field(None, max_length=100, description="会话标题，默认取首条提问")
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -60,6 +53,7 @@ class ConversationListResponse(BaseModel):
 
 class ChatMessageItem(BaseModel):
     """会话内的一条消息（user / assistant 各一条）。"""
+
     role: str
     content: str
     created_at: datetime = Field(alias="createdAt")

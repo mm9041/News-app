@@ -1,6 +1,4 @@
-from typing import Optional
-
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,55 +12,59 @@ from models.news import News
 from models.tag import Tag
 from models.users import User
 from schemas.base import NewsItemBase
+from schemas.news import (
+    NewsDetailResponse,
+    NewsListResponse,
+    NewsSearchResponse,
+    SuggestNewsItem,
+    SuggestResponse,
+    TagItem,
+)
 from utils.auth import get_current_user, get_optional_user
+from utils.logger import get_logger
+from utils.pagination import MAX_PAGE_SIZE, calc_has_more
+from utils.response import success_response
 
 router = APIRouter(prefix="/api/news", tags=["news"])
+logger = get_logger(__name__)
 
 
 @router.get("/categories")
 async def get_categories(
-        skip: int = Query(0, ge=0),
-        limit: int = Query(100, ge=1, le=200),
-        db: AsyncSession = Depends(get_database)
+    skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200), db: AsyncSession = Depends(get_database)
 ):
     categories = await news_cache.get_categories(db, skip, limit)
-    return {
-        "code": 200,
-        "message": "获取分类成功",
-        "data": categories
-    }
+    return success_response(data=categories, message="获取分类成功")
 
 
-@router.get("/list")
+@router.get("")
 async def get_news_list(
-        category_id: int = Query(default=..., alias="categoryId", ge=1),
-        # page/pageSize 必须限死范围：pageSize=0 会在 crud 里触发 skip // limit 除零，
-        # page=0 会算出负 offset 让 MySQL 直接报语法错 —— 两者都会变成 500。
-        page: int = Query(default=1, ge=1),
-        page_size: int = Query(default=10, alias="pageSize", ge=1, le=100),
-        db: AsyncSession = Depends(get_database)
+    category_id: int = Query(default=..., alias="categoryId", ge=1),
+    # page/pageSize 必须限死范围：pageSize=0 会在 crud 里触发 skip // limit 除零，
+    # page=0 会算出负 offset 让 MySQL 直接报语法错 —— 两者都会变成 500。
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(10, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
+    db: AsyncSession = Depends(get_database),
 ):
     offset = (page - 1) * page_size
     news_list = await news_cache.get_news_list(db, category_id, offset, page_size)
     total = await news_cache.get_news_count(db, category_id)
-    has_more = total > offset + len(news_list)
-    return {
-        "code": 200,
-        "message": "获取新闻列表成功",
-        "data": {
+    data = NewsListResponse.model_validate(
+        {
             "list": news_list,
             "total": total,
-            "hasMore": has_more
+            "has_more": calc_has_more(total, offset, len(news_list)),
         }
-    }
+    )
+    return success_response(data=data, message="获取新闻列表成功")
 
 
 @router.get("/search")
 async def search_news(
-        keyword: str = Query(..., min_length=1, max_length=50),
-        page: int = Query(1, ge=1),
-        page_size: int = Query(10, ge=1, le=100, alias="pageSize"),
-        db: AsyncSession = Depends(get_database)
+    keyword: str = Query(..., min_length=1, max_length=50),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
+    db: AsyncSession = Depends(get_database),
 ):
     """按关键词搜索标题/摘要/正文。
 
@@ -71,24 +73,106 @@ async def search_news(
     skip = (page - 1) * page_size
     rows, total = await news_search.search_news(db, keyword, skip, page_size)
     items = [NewsItemBase.model_validate(row) for row in rows]
-    has_more = total > skip + len(items)
-    return {
-        "code": 200,
-        "message": "搜索成功",
-        "data": {
+    data = NewsSearchResponse.model_validate(
+        {
             "list": items,
             "total": total,
-            "hasMore": has_more,
+            "has_more": calc_has_more(total, skip, len(items)),
             "keyword": keyword.strip(),
         }
-    }
+    )
+    return success_response(data=data, message="搜索成功")
 
 
-@router.get("/detail")
+@router.get("/recommend")
+async def get_recommend(
+    limit: int = Query(8, ge=1, le=20),
+    db: AsyncSession = Depends(get_database),
+    current_user: User | None = Depends(get_optional_user),
+):
+    """猜你喜欢：按收藏/浏览的分类偏好推荐；游客退化为全站热门。"""
+    rows = await recommend_crud.recommend_news(db, current_user.id if current_user else None, limit)
+    items = [NewsItemBase.model_validate(row) for row in rows]
+    return success_response(data={"list": items}, message="获取推荐成功")
+
+
+@router.put("/{news_id}/like")
+async def like_news(
+    news_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
+):
+    """点赞。重复调用返回同样结果（INSERT IGNORE，幂等）。"""
+    news = await news_cache.get_news_detail(db, news_id)
+    if not news:
+        raise HTTPException(status_code=404, detail="新闻不存在")
+
+    created = await like_crud.like(db, news_id, user.id)
+    likes = await like_crud.count_likes(db, news_id)
+
+    # 只在「本次真的新增了点赞」时通知，重复点赞不会反复骚扰发布者。
+    # 通知是附属动作：失败只记日志，点赞已落库，不该因此返回 500。
+    if created and news.user_id and news.user_id != user.id:
+        try:
+            await notification_crud.create(
+                db,
+                user_id=news.user_id,
+                actor_id=user.id,
+                type_="like",
+                news_id=news_id,
+            )
+        except Exception as e:
+            logger.warning("创建点赞通知失败（news_id=%s）：%s", news_id, e)
+
+    return success_response(data={"liked": True, "likes": likes}, message="已点赞")
+
+
+@router.delete("/{news_id}/like")
+async def unlike_news(
+    news_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
+):
+    """取消点赞。没点过也返回成功（DELETE 0 行，幂等）。"""
+    await like_crud.unlike(db, news_id, user.id)
+    likes = await like_crud.count_likes(db, news_id)
+    return success_response(data={"liked": False, "likes": likes}, message="已取消点赞")
+
+
+@router.get("/suggest")
+async def suggest(
+    keyword: str = Query(..., min_length=1, max_length=20),
+    limit: int = Query(8, ge=1, le=20),
+    db: AsyncSession = Depends(get_database),
+):
+    """输入联想：标题包含关键词的新闻 + 名称匹配的标签。"""
+    kw = keyword.strip()
+    if not kw:
+        return success_response(data=SuggestResponse(news=[], tags=[]))
+
+    news_rows = await db.execute(
+        select(News.id, News.title)
+        .where(News.title.contains(kw, autoescape=True))
+        .order_by(News.views.desc(), News.id.desc())
+        .limit(limit)
+    )
+    tag_rows = await db.execute(select(Tag.id, Tag.name).where(Tag.name.contains(kw, autoescape=True)).limit(5))
+
+    return success_response(
+        data=SuggestResponse(
+            news=[SuggestNewsItem(id=row[0], title=row[1]) for row in news_rows.all()],
+            tags=[TagItem(id=row[0], name=row[1]) for row in tag_rows.all()],
+        )
+    )
+
+
+# 注意：放在所有静态 GET 路径（/categories、/search、/recommend、/suggest）之后，
+# 否则 /{news_id} 会先把它们吞掉（int 转换失败变成 422）。
+@router.get("/{news_id}")
 async def get_news_detail(
-        news_id: int = Query(default=..., alias="id"),
-        db: AsyncSession = Depends(get_database),
-        current_user: Optional[User] = Depends(get_optional_user),
+    news_id: int,
+    db: AsyncSession = Depends(get_database),
+    current_user: User | None = Depends(get_optional_user),
 ):
     news_detail = await news_cache.get_news_detail(db, news_id)
     if not news_detail:
@@ -115,107 +199,22 @@ async def get_news_detail(
     # 标签 + 相关推荐走独立缓存：命中时只剩上面这一次「点赞」查库，
     # 而它们本身变动很慢，没必要每次详情都查库。
     extras = await news_cache.get_detail_extras(db, news_detail.id, news_detail.category_id)
-    return {
-        "code": 200,
-        "message": "获取新闻详情成功",
-        "data": {
+    data = NewsDetailResponse.model_validate(
+        {
             "id": news_detail.id,
             "title": news_detail.title,
             "content": news_detail.content,
             "image": news_detail.image,
             "author": news_detail.author,
-            "publishTime": news_detail.publish_time,
-            "categoryId": news_detail.category_id,
-            "authorId": news_detail.user_id,
-            "sourceId": news_detail.source_id,
+            "publish_time": news_detail.publish_time,
+            "category_id": news_detail.category_id,
+            "author_id": news_detail.user_id,
+            "source_id": news_detail.source_id,
             "views": views,
             "likes": likes,
-            "isLiked": is_liked,
+            "is_liked": is_liked,
             "tags": extras["tags"],
-            "relatedNews": extras["related"]
+            "related_news": extras["related"],
         }
-    }
-
-
-@router.get("/recommend")
-async def get_recommend(
-        limit: int = Query(8, ge=1, le=20),
-        db: AsyncSession = Depends(get_database),
-        current_user: Optional[User] = Depends(get_optional_user),
-):
-    """猜你喜欢：按收藏/浏览的分类偏好推荐；游客退化为全站热门。"""
-    rows = await recommend_crud.recommend_news(
-        db, current_user.id if current_user else None, limit
     )
-    items = [NewsItemBase.model_validate(row) for row in rows]
-    return {"code": 200, "message": "获取推荐成功", "data": {"list": items}}
-
-
-@router.put("/{news_id}/like")
-async def like_news(
-        news_id: int,
-        user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
-):
-    """点赞。重复调用返回同样结果（INSERT IGNORE，幂等）。"""
-    news = await news_cache.get_news_detail(db, news_id)
-    if not news:
-        raise HTTPException(status_code=404, detail="新闻不存在")
-
-    created = await like_crud.like(db, news_id, user.id)
-    likes = await like_crud.count_likes(db, news_id)
-
-    # 只在「本次真的新增了点赞」时通知，重复点赞不会反复骚扰发布者
-    if created and news.user_id and news.user_id != user.id:
-        await notification_crud.create(
-            db,
-            user_id=news.user_id,
-            actor_id=user.id,
-            type_="like",
-            news_id=news_id,
-        )
-
-    return {"code": 200, "message": "已点赞", "data": {"liked": True, "likes": likes}}
-
-
-@router.delete("/{news_id}/like")
-async def unlike_news(
-        news_id: int,
-        user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
-):
-    """取消点赞。没点过也返回成功（DELETE 0 行，幂等）。"""
-    await like_crud.unlike(db, news_id, user.id)
-    likes = await like_crud.count_likes(db, news_id)
-    return {"code": 200, "message": "已取消点赞", "data": {"liked": False, "likes": likes}}
-
-
-@router.get("/suggest")
-async def suggest(
-        keyword: str = Query(..., min_length=1, max_length=20),
-        limit: int = Query(8, ge=1, le=20),
-        db: AsyncSession = Depends(get_database),
-):
-    """输入联想：标题包含关键词的新闻 + 名称匹配的标签。"""
-    kw = keyword.strip()
-    if not kw:
-        return {"code": 200, "message": "success", "data": {"news": [], "tags": []}}
-
-    news_rows = await db.execute(
-        select(News.id, News.title)
-        .where(News.title.contains(kw, autoescape=True))
-        .order_by(News.views.desc(), News.id.desc())
-        .limit(limit)
-    )
-    tag_rows = await db.execute(
-        select(Tag.id, Tag.name).where(Tag.name.contains(kw, autoescape=True)).limit(5)
-    )
-
-    return {
-        "code": 200,
-        "message": "success",
-        "data": {
-            "news": [{"id": row[0], "title": row[1]} for row in news_rows.all()],
-            "tags": [{"id": row[0], "name": row[1]} for row in tag_rows.all()],
-        }
-    }
+    return success_response(data=data, message="获取新闻详情成功")

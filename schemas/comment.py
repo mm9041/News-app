@@ -5,7 +5,6 @@
 """
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,7 +13,7 @@ class CommentAddRequest(BaseModel):
     news_id: int = Field(..., ge=1, alias="newsId", description="新闻ID")
     content: str = Field(..., min_length=1, max_length=500, description="评论内容")
     # 传了就表示这是回复；指向任意一条评论（回复的回复会归到所属的一级评论）
-    parent_id: Optional[int] = Field(None, ge=1, alias="parentId", description="父评论ID")
+    parent_id: int | None = Field(None, ge=1, alias="parentId", description="父评论ID")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -22,28 +21,30 @@ class CommentAddRequest(BaseModel):
 class CommentUser(BaseModel):
     id: int
     username: str
-    nickname: Optional[str] = None
-    avatar: Optional[str] = None
+    nickname: str | None = None
+    avatar: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class CommentReply(BaseModel):
     """回复（二级）。不带 replies。"""
+
     id: int
     content: str
     created_at: datetime = Field(alias="createdAt")
     user: CommentUser
     can_delete: bool = Field(False, alias="canDelete")
-    parent_id: Optional[int] = Field(None, alias="parentId")
+    parent_id: int | None = Field(None, alias="parentId")
     # 被回复人的昵称，用于渲染「回复 @某某」
-    reply_to: Optional[str] = Field(None, alias="replyTo")
+    reply_to: str | None = Field(None, alias="replyTo")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class CommentItemResponse(CommentReply):
     """一级评论，带它下面的回复。"""
+
     replies: list[CommentReply] = Field(default_factory=list)
 
 

@@ -1,14 +1,15 @@
 from datetime import datetime
 
 from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.mysql import TIMESTAMP
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, UnsignedInt
 
 
 class Tag(Base):
     """标签。与新闻是多对多，一条新闻可以挂多个标签。"""
+
     __tablename__ = "tag"
 
     __table_args__ = (
@@ -30,6 +31,7 @@ class NewsTag(Base):
     `(news_id, tag_id)` 唯一索引保证不会重复挂同一个标签，
     写的时候用 INSERT IGNORE，标签重名也靠 `tag.name` 的唯一索引兜住。
     """
+
     __tablename__ = "news_tag"
 
     __table_args__ = (

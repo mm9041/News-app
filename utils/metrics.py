@@ -50,9 +50,7 @@ def render_metrics() -> str:
                 f'http_request_duration_seconds_bucket{{method="{method}",path="{path}",le="{bound}"}} {cumulative}'
             )
         cumulative += buckets[-1]
-        lines.append(
-            f'http_request_duration_seconds_bucket{{method="{method}",path="{path}",le="+Inf"}} {cumulative}'
-        )
+        lines.append(f'http_request_duration_seconds_bucket{{method="{method}",path="{path}",le="+Inf"}} {cumulative}')
         total, count = _summary.get(key, [0.0, 0])
         lines.append(f'http_request_duration_seconds_sum{{method="{method}",path="{path}"}} {total:.6f}')
         lines.append(f'http_request_duration_seconds_count{{method="{method}",path="{path}"}} {count}')

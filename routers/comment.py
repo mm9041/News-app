@@ -7,8 +7,6 @@
 - 不做软删除：删了就是删了，新闻/用户被删时外键 CASCADE 一起清
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,23 +23,26 @@ from schemas.comment import (
     CommentUser,
 )
 from utils.auth import get_current_user, get_optional_user
+from utils.logger import get_logger
+from utils.pagination import MAX_PAGE_SIZE, calc_has_more
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/comment", tags=["comment"])
+logger = get_logger(__name__)
 
 
-def _can_delete(current_user: Optional[User], owner_id: int) -> bool:
+def _can_delete(current_user: User | None, owner_id: int) -> bool:
     """本人或管理员。规则只写这一处，列表和详情不会不一致。"""
     return bool(current_user and (current_user.id == owner_id or current_user.is_admin))
 
 
-@router.get("/list")
+@router.get("")
 async def list_comments(
-        news_id: int = Query(..., alias="newsId", ge=1),
-        page: int = Query(1, ge=1),
-        page_size: int = Query(10, ge=1, le=50, alias="pageSize"),
-        db: AsyncSession = Depends(get_database),
-        current_user: Optional[User] = Depends(get_optional_user),
+    news_id: int = Query(..., alias="newsId", ge=1),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
+    db: AsyncSession = Depends(get_database),
+    current_user: User | None = Depends(get_optional_user),
 ):
     """一级评论分页，每条带出它下面的全部回复。"""
     skip = (page - 1) * page_size
@@ -76,16 +77,16 @@ async def list_comments(
     data = CommentListResponse(
         list=items,
         total=total,
-        has_more=total > skip + len(items),
+        has_more=calc_has_more(total, skip, len(items)),
     )
     return success_response(data=data, message="获取评论成功")
 
 
-@router.post("/add")
+@router.post("")
 async def add_comment(
-        data: CommentAddRequest,
-        user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+    data: CommentAddRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
 ):
     news = await news_cache.get_news_detail(db, data.news_id)
     if not news:
@@ -99,8 +100,8 @@ async def add_comment(
         )
 
     # 回复：把 parent 归到所属的一级评论，同时记下「回复给谁」
-    root_id: Optional[int] = None
-    reply_to_user_id: Optional[int] = None
+    root_id: int | None = None
+    reply_to_user_id: int | None = None
     if data.parent_id:
         parent = await comment_crud.get_comment(db, data.parent_id)
         if not parent or parent.news_id != data.news_id:
@@ -108,38 +109,40 @@ async def add_comment(
         root_id = parent.parent_id or parent.id
         reply_to_user_id = parent.user_id
 
-    comment = await comment_crud.add_comment(
-        db, data.news_id, user.id, content, root_id, reply_to_user_id
-    )
+    comment = await comment_crud.add_comment(db, data.news_id, user.id, content, root_id, reply_to_user_id)
 
-    # 通知：回复优先（通知被回复者），否则通知新闻发布者
-    if reply_to_user_id and reply_to_user_id != user.id:
-        await notification_crud.create(
-            db,
-            user_id=reply_to_user_id,
-            actor_id=user.id,
-            type_="reply",
-            news_id=data.news_id,
-            comment_id=comment.id,
-        )
-    elif news.user_id and news.user_id != user.id:
-        await notification_crud.create(
-            db,
-            user_id=news.user_id,
-            actor_id=user.id,
-            type_="comment",
-            news_id=data.news_id,
-            comment_id=comment.id,
-        )
+    # 通知是附属动作：失败只记日志，不能返回 500 —— 此时评论已落库，
+    # 用户看到「评论失败」重试会发出重复评论。
+    try:
+        if reply_to_user_id and reply_to_user_id != user.id:
+            await notification_crud.create(
+                db,
+                user_id=reply_to_user_id,
+                actor_id=user.id,
+                type_="reply",
+                news_id=data.news_id,
+                comment_id=comment.id,
+            )
+        elif news.user_id and news.user_id != user.id:
+            await notification_crud.create(
+                db,
+                user_id=news.user_id,
+                actor_id=user.id,
+                type_="comment",
+                news_id=data.news_id,
+                comment_id=comment.id,
+            )
+    except Exception as e:
+        logger.warning("创建评论通知失败（comment_id=%s）：%s", comment.id, e)
 
     return success_response(data={"id": comment.id}, message="评论成功")
 
 
 @router.delete("/{comment_id}")
 async def delete_comment(
-        comment_id: int,
-        user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+    comment_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
 ):
     comment = await comment_crud.get_comment(db, comment_id)
     if not comment:

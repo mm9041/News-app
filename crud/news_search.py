@@ -55,9 +55,7 @@ async def _search_by_fulltext(db: AsyncSession, boolean_query: str, skip: int, l
     # 两处 MATCH 用不同的参数名，否则同一个 text 子句复用会撞绑定参数。
     # 排序表达式直接把 DESC 写进 text：TextClause 没有 .desc() 方法。
     match = text(_MATCH_TEMPLATE.format(param="kw_match")).bindparams(kw_match=boolean_query)
-    score_desc = text(_MATCH_TEMPLATE.format(param="kw_score") + " DESC").bindparams(
-        kw_score=boolean_query
-    )
+    score_desc = text(_MATCH_TEMPLATE.format(param="kw_score") + " DESC").bindparams(kw_score=boolean_query)
 
     total = (await db.execute(select(func.count(News.id)).where(match))).scalar_one()
     if not total:
@@ -81,13 +79,7 @@ async def _search_by_like(db: AsyncSession, keyword: str, skip: int, limit: int)
     if not total:
         return [], 0
 
-    stmt = (
-        select(News)
-        .where(condition)
-        .order_by(News.publish_time.desc(), News.id.desc())
-        .offset(skip)
-        .limit(limit)
-    )
+    stmt = select(News).where(condition).order_by(News.publish_time.desc(), News.id.desc()).offset(skip).limit(limit)
     rows = (await db.execute(stmt)).scalars().all()
     return rows, total
 

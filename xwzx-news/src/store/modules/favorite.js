@@ -30,9 +30,7 @@ export const useFavoriteStore = defineStore('favorite', {
       
         try {
           this.loading = true;
-          const response = await http.get('/api/favorite/check', {
-            params: { newsId }
-          });
+          const response = await http.get(`/api/favorite/${newsId}`);
           
           if (response.data.code === 200) {
             return { 
@@ -67,7 +65,7 @@ export const useFavoriteStore = defineStore('favorite', {
       
       try {
         this.loading = true;
-        const response = await http.post('/api/favorite/add', { newsId });
+        const response = await http.post('/api/favorite', { newsId });
         
         if (response.data.code === 200) {
           return { success: true, data: response.data.data };
@@ -93,9 +91,7 @@ export const useFavoriteStore = defineStore('favorite', {
       
       try {
         this.loading = true;
-        const response = await http.delete('/api/favorite/remove', {
-          params: { newsId }
-        });
+        const response = await http.delete(`/api/favorite/${newsId}`);
         
         if (response.data.code === 200) {
           return { success: true };
@@ -178,7 +174,7 @@ export const useFavoriteStore = defineStore('favorite', {
       
       try {
         this.loading = true;
-        const response = await http.delete('/api/favorite/clear');
+        const response = await http.delete('/api/favorite');
         
         if (response.data.code === 200) {
           // 清空本地收藏列表
@@ -219,7 +215,7 @@ export const useFavoriteStore = defineStore('favorite', {
       
       try {
         this.loading = true;
-        const response = await http.get('/api/favorite/list', {
+        const response = await http.get('/api/favorite', {
           params: { page, pageSize }
         });
         

@@ -54,6 +54,11 @@ jobs:
       - name: 安装依赖
         run: pip install -r requirements-dev.txt
 
+      - name: 代码风格检查
+        run: |
+          ruff check .
+          ruff format --check .
+
       - name: 初始化数据库
         # 显式指定客户端字符集，否则示例数据里的中文会按 latin1 存进去
         run: mysql --default-character-set=utf8mb4 -h 127.0.0.1 -uroot -proot < database.sql

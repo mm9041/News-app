@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from models.users import User
 from utils.auth import get_current_user
+from utils.response import success_response
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
@@ -46,17 +47,15 @@ def _detect_ext(head: bytes) -> str | None:
 
 @router.post("/image")
 async def upload_image(
-        request: Request,
-        file: UploadFile = File(..., description="图片文件"),
-        user: User = Depends(get_current_user),
+    request: Request,
+    file: UploadFile = File(..., description="图片文件"),
+    user: User = Depends(get_current_user),
 ):
     """登录用户都能上传（管理员发新闻、普通用户换头像）。"""
     data = await file.read()
 
     if not data:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="文件为空"
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="文件为空")
     if len(data) > MAX_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
@@ -84,8 +83,7 @@ async def upload_image(
     # 返回完整 URL，和库里已有的图片字段（picsum 的完整 URL）保持一致，
     # 前端拿到直接塞进 <img> 即可。
     url = f"/uploads/{rel_dir}/{filename}"
-    return {
-        "code": 200,
-        "message": "上传成功",
-        "data": {"url": str(request.base_url).rstrip("/") + url},
-    }
+    return success_response(
+        data={"url": str(request.base_url).rstrip("/") + url},
+        message="上传成功",
+    )

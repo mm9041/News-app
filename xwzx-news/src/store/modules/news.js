@@ -8,9 +8,12 @@ export const useNewsStore = defineStore('news', {
     categories: [],
     recommendations: [],
     currentCategory: 1,
+    page: 0,
     loading: false,
+    fetching: false,
     refreshing: false,
     finished: false,
+    requestSeq: 0,
     categoriesLoading: false
   }),
   
@@ -51,43 +54,45 @@ export const useNewsStore = defineStore('news', {
       }
     },
     
-    // 获取新闻列表
+    // 获取新闻列表。页码只由成功请求推进，旧分类/旧刷新请求直接丢弃。
     async getNewsList(isRefresh = false) {
+      if (this.fetching && !isRefresh) return
+
+      const requestId = ++this.requestSeq
+      const categoryId = this.currentCategory
+      const page = isRefresh ? 1 : this.page + 1
+
       if (isRefresh) {
         this.refreshing = true
         this.newsList = []
         this.finished = false
       }
-      
-      this.loading = true
-      
-      try {
-        // 使用API请求获取新闻列表
-        const params = {
-          categoryId: this.currentCategory,
-          page: isRefresh ? 1 : Math.ceil(this.newsList.length / 10) + 1,
-          pageSize: 10
-        }
-        
-        const response = await http.get('/api/news/list', { params });
-        
-        if (response.data && response.data.code === 200) {
-          const newsData = response.data.data.list;
-          
-          // 更新新闻列表
-          this.newsList = isRefresh ? newsData : [...this.newsList, ...newsData];
-          
-          // 判断是否加载完成
-          if (newsData.length < params.pageSize) {
-            this.finished = true;
-          }
-        }
 
+      this.fetching = true
+      this.loading = true
+
+      try {
+        const response = await http.get('/api/news', {
+          params: { categoryId, page, pageSize: 10 }
+        })
+
+        if (requestId !== this.requestSeq || categoryId !== this.currentCategory) return
+        if (response.data?.code !== 200) return
+
+        const newsData = response.data.data.list || []
+        this.newsList = isRefresh ? newsData : [...this.newsList, ...newsData]
+        this.page = page
+        this.finished = newsData.length < 10
       } catch (error) {
-        console.error('获取新闻列表失败:', error)
+        if (requestId === this.requestSeq) {
+          console.error('获取新闻列表失败:', error)
+        }
       } finally {
-        this.loading = false
-        this.refreshing = false
+        if (requestId === this.requestSeq) {
+          this.fetching = false
+          this.loading = false
+          this.refreshing = false
+        }
       }
     },
     
@@ -100,7 +105,7 @@ export const useNewsStore = defineStore('news', {
           page: 1,
           pageSize: 10
         }
-        const response = await http.get('/api/news/list', { params });
+        const response = await http.get('/api/news', { params });
 
         if (!response.data || response.data.code !== 200) return;
 
@@ -130,7 +135,7 @@ export const useNewsStore = defineStore('news', {
     // 获取新闻详情
     async getNewsDetail(id) {
       try {
-        const response = await http.get('/api/news/detail', { params: { id } });
+        const response = await http.get(`/api/news/${id}`);
         
         if (response.data && response.data.code === 200) {
           // 设置新闻详情数据
@@ -146,12 +151,13 @@ export const useNewsStore = defineStore('news', {
     },
     // 切换新闻分类
     changeCategory(categoryId) {
-      if (this.currentCategory !== categoryId) {
-        this.currentCategory = categoryId
-        this.newsList = []
-        this.finished = false
-        this.getNewsList(true)
-      }
+      if (this.currentCategory === categoryId) return
+
+      this.currentCategory = categoryId
+      this.page = 0
+      this.newsList = []
+      this.finished = false
+      this.getNewsList(true)
     }
   }
 })

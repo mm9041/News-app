@@ -39,17 +39,17 @@ def test_reply_nests_under_parent(client, news_with_tags, other_user, temp_user)
     news_id = news_with_tags["id"]
 
     root = client.post(
-        "/api/comment/add", json={"newsId": news_id, "content": "一级评论"}, headers=_auth(other_user)
+        "/api/comment", json={"newsId": news_id, "content": "一级评论"}, headers=_auth(other_user)
     ).json()["data"]["id"]
 
     reply = client.post(
-        "/api/comment/add",
+        "/api/comment",
         json={"newsId": news_id, "content": "我来回复", "parentId": root},
         headers=_auth(temp_user),
     )
     assert reply.status_code == 200, reply.text
 
-    data = client.get("/api/comment/list", params={"newsId": news_id}, headers=_auth(other_user)).json()["data"]
+    data = client.get("/api/comment", params={"newsId": news_id}, headers=_auth(other_user)).json()["data"]
     item = next(i for i in data["list"] if i["id"] == root)
 
     assert len(item["replies"]) == 1
@@ -62,39 +62,39 @@ def test_reply_nests_under_parent(client, news_with_tags, other_user, temp_user)
 
 def test_reply_notifies_replied_user(client, news_with_tags, other_user, temp_user):
     news_id = news_with_tags["id"]
-    root = client.post(
-        "/api/comment/add", json={"newsId": news_id, "content": "求回复"}, headers=_auth(other_user)
-    ).json()["data"]["id"]
+    root = client.post("/api/comment", json={"newsId": news_id, "content": "求回复"}, headers=_auth(other_user)).json()[
+        "data"
+    ]["id"]
 
     client.post(
-        "/api/comment/add",
+        "/api/comment",
         json={"newsId": news_id, "content": "回你了", "parentId": root},
         headers=_auth(temp_user),
     )
 
-    data = client.get("/api/notification/list", headers=_auth(other_user)).json()["data"]
+    data = client.get("/api/notification", headers=_auth(other_user)).json()["data"]
     assert any(i["type"] == "reply" and i["newsId"] == news_id for i in data["list"])
 
 
 def test_reply_to_reply_stays_two_levels(client, news_with_tags, other_user, temp_user):
     """回复一条回复时，仍然挂在同一个一级评论下，不会出现第三层。"""
     news_id = news_with_tags["id"]
-    root = client.post(
-        "/api/comment/add", json={"newsId": news_id, "content": "根"}, headers=_auth(other_user)
-    ).json()["data"]["id"]
+    root = client.post("/api/comment", json={"newsId": news_id, "content": "根"}, headers=_auth(other_user)).json()[
+        "data"
+    ]["id"]
     first_reply = client.post(
-        "/api/comment/add",
+        "/api/comment",
         json={"newsId": news_id, "content": "回复1", "parentId": root},
         headers=_auth(temp_user),
     ).json()["data"]["id"]
 
     client.post(
-        "/api/comment/add",
+        "/api/comment",
         json={"newsId": news_id, "content": "回复2", "parentId": first_reply},
         headers=_auth(other_user),
     )
 
-    data = client.get("/api/comment/list", params={"newsId": news_id}, headers=_auth(other_user)).json()["data"]
+    data = client.get("/api/comment", params={"newsId": news_id}, headers=_auth(other_user)).json()["data"]
     item = next(i for i in data["list"] if i["id"] == root)
     # 两条回复都平铺在同一层
     assert len(item["replies"]) == 2
@@ -103,7 +103,7 @@ def test_reply_to_reply_stays_two_levels(client, news_with_tags, other_user, tem
 
 def test_reply_to_missing_comment(client, news_with_tags, temp_user):
     resp = client.post(
-        "/api/comment/add",
+        "/api/comment",
         json={"newsId": news_with_tags["id"], "content": "x", "parentId": 999999},
         headers=_auth(temp_user),
     )
@@ -112,18 +112,18 @@ def test_reply_to_missing_comment(client, news_with_tags, temp_user):
 
 def test_delete_root_cascades_replies(client, news_with_tags, other_user, temp_user):
     news_id = news_with_tags["id"]
-    root = client.post(
-        "/api/comment/add", json={"newsId": news_id, "content": "将被删"}, headers=_auth(other_user)
-    ).json()["data"]["id"]
+    root = client.post("/api/comment", json={"newsId": news_id, "content": "将被删"}, headers=_auth(other_user)).json()[
+        "data"
+    ]["id"]
     client.post(
-        "/api/comment/add",
+        "/api/comment",
         json={"newsId": news_id, "content": "回复也会没", "parentId": root},
         headers=_auth(temp_user),
     )
 
     client.delete(f"/api/comment/{root}", headers=_auth(other_user))
 
-    data = client.get("/api/comment/list", params={"newsId": news_id}).json()["data"]
+    data = client.get("/api/comment", params={"newsId": news_id}).json()["data"]
     assert all(i["id"] != root for i in data["list"])
 
 
@@ -136,13 +136,13 @@ def test_news_keeps_deduped_tags(client, news_with_tags):
 
 
 def test_detail_returns_tags_with_id(client, news_with_tags):
-    detail = client.get("/api/news/detail", params={"id": news_with_tags["id"]}).json()["data"]
+    detail = client.get(f"/api/news/{news_with_tags['id']}").json()["data"]
     assert {t["name"] for t in detail["tags"]} == {"pytest标签", "AI"}
     assert all("id" in t for t in detail["tags"])
 
 
 def test_list_news_by_tag(client, news_with_tags):
-    detail = client.get("/api/news/detail", params={"id": news_with_tags["id"]}).json()["data"]
+    detail = client.get(f"/api/news/{news_with_tags['id']}").json()["data"]
     tag_id = next(t["id"] for t in detail["tags"] if t["name"] == "pytest标签")
 
     data = client.get(f"/api/tag/{tag_id}/news").json()["data"]
@@ -161,7 +161,7 @@ def test_update_news_replaces_tags(client, news_with_tags):
 
     # 先读一次详情，把「标签 + 相关推荐」写进缓存；
     # 后台改完必须让这份缓存一起失效，否则前台最多 3 分钟看不到新标签。
-    before = client.get("/api/news/detail", params={"id": news_id}).json()["data"]
+    before = client.get(f"/api/news/{news_id}").json()["data"]
     assert {t["name"] for t in before["tags"]} == {"pytest标签", "AI"}
 
     resp = client.put(
@@ -177,7 +177,7 @@ def test_update_news_replaces_tags(client, news_with_tags):
     assert resp.status_code == 200
     assert resp.json()["data"]["tags"] == ["新标签"]
 
-    detail = client.get("/api/news/detail", params={"id": news_id}).json()["data"]
+    detail = client.get(f"/api/news/{news_id}").json()["data"]
     assert [t["name"] for t in detail["tags"]] == ["新标签"]
 
 
@@ -223,9 +223,9 @@ def test_follow_author_and_list(client, temp_user, db):
         assert resp.status_code == 200
 
         authors = client.get("/api/follow/authors", headers=headers).json()["data"]
-        assert any(
-            a["name"] == author and a["newsCount"] == expected for a in authors
-        ), "关注列表里的新闻数应与库内一致"
+        assert any(a["name"] == author and a["newsCount"] == expected for a in authors), (
+            "关注列表里的新闻数应与库内一致"
+        )
 
         # 用固定的小页长翻完全部页：既验证 total 是全量计数，
         # 也验证分页不重不漏（这两点是原断言真正想守的东西）。
@@ -249,9 +249,7 @@ def test_follow_author_and_list(client, temp_user, db):
         assert len(seen) == expected, "翻页拿到的条数与 total 不一致"
         assert len(set(seen)) == expected, "翻页出现重复条目"
 
-        status_data = client.get(
-            "/api/follow/status", params={"name": author}, headers=headers
-        ).json()["data"]
+        status_data = client.get("/api/follow/status", params={"name": author}, headers=headers).json()["data"]
         assert status_data["following"] is True
 
         # 幂等：重复关注不产生重复条目
@@ -263,12 +261,8 @@ def test_follow_author_and_list(client, temp_user, db):
 
 
 def test_author_news_pagination(client):
-    page1 = client.get(
-        "/api/follow/news", params={"name": "海南日报", "page": 1, "pageSize": 5}
-    ).json()["data"]
-    page2 = client.get(
-        "/api/follow/news", params={"name": "海南日报", "page": 2, "pageSize": 5}
-    ).json()["data"]
+    page1 = client.get("/api/follow/news", params={"name": "海南日报", "page": 1, "pageSize": 5}).json()["data"]
+    page2 = client.get("/api/follow/news", params={"name": "海南日报", "page": 2, "pageSize": 5}).json()["data"]
     assert 0 < len(page1["list"]) <= 5
     assert not {i["id"] for i in page1["list"]} & {i["id"] for i in page2["list"]}
 

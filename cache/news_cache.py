@@ -1,6 +1,7 @@
-from typing import Any, Dict, Iterable, List, Optional
+from collections.abc import Iterable
+from typing import Any
 
-from config.cache_conf import get_json_cache, set_cache, redis_client
+from config.cache_conf import get_json_cache, redis_client, set_cache
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,18 +18,19 @@ async def get_cached_categories():
 
 
 # 设置缓存分类、配置：7200  列表：600  详情：1800  验证码：120
-async def set_cache_categories(data: List[Dict[str, Any]], expire: int = 7200):
+async def set_cache_categories(data: list[dict[str, Any]], expire: int = 7200):
     return await set_cache(CATEGORIES_KEY, data, expire)
 
 
-async def set_cache_news_list(category_id: Optional[int], page: int, size: int, news_list: List[Dict[str, Any]],
-                              expire: int = 1800):
+async def set_cache_news_list(
+    category_id: int | None, page: int, size: int, news_list: list[dict[str, Any]], expire: int = 1800
+):
     category_part = category_id if category_id is not None else "all"
     key = f"{NEWS_LIST_PREFIX}{category_part}:{page}:{size}"
     return await set_cache(key, news_list, expire)
 
 
-async def get_cached_news_list(category_id: Optional[int], page: int, size: int):
+async def get_cached_news_list(category_id: int | None, page: int, size: int):
     category_part = category_id if category_id is not None else "all"
     key = f"{NEWS_LIST_PREFIX}{category_part}:{page}:{size}"
     return await get_json_cache(key)
@@ -59,7 +61,7 @@ async def delete_cache_pattern(pattern: str, batch_size: int = 500) -> int:
         return deleted
 
 
-async def invalidate_news_list(category_id: Optional[int]) -> int:
+async def invalidate_news_list(category_id: int | None) -> int:
     """某个分类的新闻列表发生变化时，清掉它全部分页的缓存。
 
     为什么必须主动失效：列表缓存是「读时回填」，而 `views` 会随着每次浏览详情变化。
