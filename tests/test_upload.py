@@ -30,10 +30,11 @@ def test_upload_requires_login(client):
 
 def test_upload_png_and_serve_it_back(client, temp_user):
     resp = _upload(client, temp_user["token"], PNG)
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 201, resp.text
 
     url = resp.json()["data"]["url"]
     assert "/uploads/" in url and url.endswith(".png")
+    assert resp.headers["Location"] == url
 
     try:
         path = _local_path(url)
@@ -49,7 +50,7 @@ def test_upload_png_and_serve_it_back(client, temp_user):
 def test_extension_comes_from_magic_bytes_not_filename(client, temp_user):
     """文件名写成 .php 也没用：扩展名由文件头决定。"""
     resp = _upload(client, temp_user["token"], PNG, filename="shell.php", content_type="application/x-php")
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 201, resp.text
 
     url = resp.json()["data"]["url"]
     try:

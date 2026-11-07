@@ -54,7 +54,7 @@ export const useUserStore = defineStore('user', {
           password: userData.password
         });
 
-        if (response.data && response.data.code === 200) {
+        if (response.data && [200, 201].includes(response.data.code)) {
           // 注册成功后端也会下发 cookie，直接算登录
           this.userInfo = response.data.data.userInfo;
           this.isLogin = true;
@@ -160,7 +160,7 @@ export const useUserStore = defineStore('user', {
         return { success: false, message: '未登录' };
       }
       try {
-        const response = await http.patch('/api/user', profile);
+        const response = await http.patch('/api/user/me', profile);
         if (response.data && response.data.code === 200) {
           // 后端回的是完整用户信息，直接覆盖：昵称、头像、性别一次同步，
           // 评论列表下次加载时也会显示新昵称

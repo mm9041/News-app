@@ -86,8 +86,11 @@ def temp_user(client):
     _clear_rate_limit("register")
 
     resp = client.post("/api/user/register", json={"username": username, "password": password})
-    assert resp.status_code == 200, resp.text
-    data = resp.json()["data"]
+    assert resp.status_code == 201, resp.text
+    assert resp.headers["Location"] == "/api/user/me"
+    payload = resp.json()
+    assert payload["code"] == 201
+    data = payload["data"]
 
     # 注册/登录会下发 cookie；夹具建好用户后清掉，避免把登录态漏给"游客"用例
     client.cookies.clear()
@@ -106,8 +109,11 @@ def other_user(client):
 
     _clear_rate_limit("register")
     resp = client.post("/api/user/register", json={"username": username, "password": password})
-    assert resp.status_code == 200, resp.text
-    data = resp.json()["data"]
+    assert resp.status_code == 201, resp.text
+    assert resp.headers["Location"] == "/api/user/me"
+    payload = resp.json()
+    assert payload["code"] == 201
+    data = payload["data"]
 
     # 注册/登录会下发 cookie；夹具建好用户后清掉，避免把登录态漏给"游客"用例
     client.cookies.clear()
@@ -135,7 +141,7 @@ def admin_user(client, db):
 
     _clear_rate_limit("register")
     resp = client.post("/api/user/register", json={"username": username, "password": password})
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 201, resp.text
     user_id = resp.json()["data"]["userInfo"]["id"]
 
     with db.cursor() as cur:

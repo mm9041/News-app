@@ -14,6 +14,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from schemas.base import NewsItemBase
 
 
+class CategoryItem(BaseModel):
+    id: int
+    name: str
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class NewsListResponse(BaseModel):
     """分类列表的响应包装。列表项复用公共的 NewsItemBase。"""
 
@@ -79,3 +89,12 @@ class SuggestResponse(BaseModel):
 
     news: list[SuggestNewsItem]
     tags: list[TagItem]
+
+
+class NewsRecommendResponse(BaseModel):
+    list: list[NewsItemBase]
+
+
+class NewsLikeResponse(BaseModel):
+    liked: bool
+    likes: int

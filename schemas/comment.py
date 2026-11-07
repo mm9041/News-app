@@ -54,3 +54,7 @@ class CommentListResponse(BaseModel):
     has_more: bool = Field(alias="hasMore")
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class CommentCreatedResponse(BaseModel):
+    id: int

@@ -16,12 +16,19 @@ from pathlib import Path
 
 import anyio
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from pydantic import BaseModel
 
 from models.users import User
+from schemas.common import ApiResponse
+from utils.api_docs import AUTHENTICATED_ERRORS
 from utils.auth import get_current_user
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
+
+
+class UploadImageResponse(BaseModel):
+    url: str
 
 UPLOAD_ROOT = Path(__file__).resolve().parent.parent / "uploads"
 MAX_SIZE = 5 * 1024 * 1024  # 5MB
@@ -45,7 +52,12 @@ def _detect_ext(head: bytes) -> str | None:
     return None
 
 
-@router.post("/image")
+@router.post(
+    "/image",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ApiResponse[UploadImageResponse],
+    responses=AUTHENTICATED_ERRORS,
+)
 async def upload_image(
     request: Request,
     file: UploadFile = File(..., description="图片文件"),
@@ -83,7 +95,10 @@ async def upload_image(
     # 返回完整 URL，和库里已有的图片字段（picsum 的完整 URL）保持一致，
     # 前端拿到直接塞进 <img> 即可。
     url = f"/uploads/{rel_dir}/{filename}"
+    absolute_url = str(request.base_url).rstrip("/") + url
     return success_response(
-        data={"url": str(request.base_url).rstrip("/") + url},
+        data=UploadImageResponse(url=absolute_url),
         message="上传成功",
+        status_code=status.HTTP_201_CREATED,
+        headers={"Location": absolute_url},
     )

@@ -7,7 +7,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 # 单个标签上限对齐 tag.name 的 VARCHAR(30)：超长会被 INSERT IGNORE 静默截断，
 # 不同长标签截断后还可能撞成同一个，所以在请求校验阶段就拒掉。
@@ -124,3 +124,18 @@ class AdminFlagRequest(BaseModel):
     is_admin: bool = Field(..., alias="isAdmin")
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class AdminUserPatchRequest(BaseModel):
+    """管理员更新用户状态，只允许修改封禁和管理员标记。"""
+
+    banned: bool | None = Field(None, description="是否封禁")
+    is_admin: bool | None = Field(None, alias="isAdmin", description="是否管理员")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def _require_at_least_one_field(self):
+        if self.banned is None and self.is_admin is None:
+            raise ValueError("至少提供 banned 或 isAdmin 中的一个字段")
+        return self

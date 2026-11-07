@@ -17,11 +17,14 @@ from crud import notification as notification_crud
 from models.users import User
 from schemas.comment import (
     CommentAddRequest,
+    CommentCreatedResponse,
     CommentItemResponse,
     CommentListResponse,
     CommentReply,
     CommentUser,
 )
+from schemas.common import ApiResponse
+from utils.api_docs import documented_errors
 from utils.auth import get_current_user, get_optional_user
 from utils.logger import get_logger
 from utils.pagination import MAX_PAGE_SIZE, calc_has_more
@@ -29,6 +32,7 @@ from utils.response import success_response
 
 router = APIRouter(prefix="/api/comment", tags=["comment"])
 logger = get_logger(__name__)
+COMMENT_ERRORS = documented_errors(401, 403, 404, 422)
 
 
 def _can_delete(current_user: User | None, owner_id: int) -> bool:
@@ -36,7 +40,7 @@ def _can_delete(current_user: User | None, owner_id: int) -> bool:
     return bool(current_user and (current_user.id == owner_id or current_user.is_admin))
 
 
-@router.get("")
+@router.get("", response_model=ApiResponse[CommentListResponse], responses=COMMENT_ERRORS)
 async def list_comments(
     news_id: int = Query(..., alias="newsId", ge=1),
     page: int = Query(1, ge=1),
@@ -82,7 +86,12 @@ async def list_comments(
     return success_response(data=data, message="获取评论成功")
 
 
-@router.post("")
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ApiResponse[CommentCreatedResponse],
+    responses=COMMENT_ERRORS,
+)
 async def add_comment(
     data: CommentAddRequest,
     user: User = Depends(get_current_user),
@@ -135,10 +144,15 @@ async def add_comment(
     except Exception as e:
         logger.warning("创建评论通知失败（comment_id=%s）：%s", comment.id, e)
 
-    return success_response(data={"id": comment.id}, message="评论成功")
+    return success_response(
+        data=CommentCreatedResponse(id=comment.id),
+        message="评论成功",
+        status_code=status.HTTP_201_CREATED,
+        headers={"Location": f"/api/comment/{comment.id}"},
+    )
 
 
-@router.delete("/{comment_id}")
+@router.delete("/{comment_id}", response_model=ApiResponse[None], responses=COMMENT_ERRORS)
 async def delete_comment(
     comment_id: int,
     user: User = Depends(get_current_user),

@@ -12,14 +12,19 @@ from models.news import News
 from models.tag import Tag
 from models.users import User
 from schemas.base import NewsItemBase
+from schemas.common import ApiResponse
 from schemas.news import (
+    CategoryItem,
     NewsDetailResponse,
+    NewsLikeResponse,
     NewsListResponse,
+    NewsRecommendResponse,
     NewsSearchResponse,
     SuggestNewsItem,
     SuggestResponse,
     TagItem,
 )
+from utils.api_docs import PUBLIC_READ_ERRORS, documented_errors
 from utils.auth import get_current_user, get_optional_user
 from utils.logger import get_logger
 from utils.pagination import MAX_PAGE_SIZE, calc_has_more
@@ -27,9 +32,11 @@ from utils.response import success_response
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 logger = get_logger(__name__)
+NEWS_ERRORS = documented_errors(404, 422)
+LIKE_ERRORS = documented_errors(401, 403, 404, 422)
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=ApiResponse[list[CategoryItem]], responses=PUBLIC_READ_ERRORS)
 async def get_categories(
     skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200), db: AsyncSession = Depends(get_database)
 ):
@@ -37,7 +44,7 @@ async def get_categories(
     return success_response(data=categories, message="获取分类成功")
 
 
-@router.get("")
+@router.get("", response_model=ApiResponse[NewsListResponse], responses=NEWS_ERRORS)
 async def get_news_list(
     category_id: int = Query(default=..., alias="categoryId", ge=1),
     # page/pageSize 必须限死范围：pageSize=0 会在 crud 里触发 skip // limit 除零，
@@ -59,7 +66,7 @@ async def get_news_list(
     return success_response(data=data, message="获取新闻列表成功")
 
 
-@router.get("/search")
+@router.get("/search", response_model=ApiResponse[NewsSearchResponse], responses=NEWS_ERRORS)
 async def search_news(
     keyword: str = Query(..., min_length=1, max_length=50),
     page: int = Query(1, ge=1),
@@ -84,7 +91,7 @@ async def search_news(
     return success_response(data=data, message="搜索成功")
 
 
-@router.get("/recommend")
+@router.get("/recommend", response_model=ApiResponse[NewsRecommendResponse], responses=NEWS_ERRORS)
 async def get_recommend(
     limit: int = Query(8, ge=1, le=20),
     db: AsyncSession = Depends(get_database),
@@ -96,7 +103,7 @@ async def get_recommend(
     return success_response(data={"list": items}, message="获取推荐成功")
 
 
-@router.put("/{news_id}/like")
+@router.put("/{news_id}/like", response_model=ApiResponse[NewsLikeResponse], responses=LIKE_ERRORS)
 async def like_news(
     news_id: int,
     user: User = Depends(get_current_user),
@@ -127,7 +134,7 @@ async def like_news(
     return success_response(data={"liked": True, "likes": likes}, message="已点赞")
 
 
-@router.delete("/{news_id}/like")
+@router.delete("/{news_id}/like", response_model=ApiResponse[NewsLikeResponse], responses=LIKE_ERRORS)
 async def unlike_news(
     news_id: int,
     user: User = Depends(get_current_user),
@@ -139,7 +146,7 @@ async def unlike_news(
     return success_response(data={"liked": False, "likes": likes}, message="已取消点赞")
 
 
-@router.get("/suggest")
+@router.get("/suggest", response_model=ApiResponse[SuggestResponse], responses=NEWS_ERRORS)
 async def suggest(
     keyword: str = Query(..., min_length=1, max_length=20),
     limit: int = Query(8, ge=1, le=20),
@@ -168,7 +175,7 @@ async def suggest(
 
 # 注意：放在所有静态 GET 路径（/categories、/search、/recommend、/suggest）之后，
 # 否则 /{news_id} 会先把它们吞掉（int 转换失败变成 422）。
-@router.get("/{news_id}")
+@router.get("/{news_id}", response_model=ApiResponse[NewsDetailResponse], responses=NEWS_ERRORS)
 async def get_news_detail(
     news_id: int,
     db: AsyncSession = Depends(get_database),

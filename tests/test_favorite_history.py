@@ -31,10 +31,11 @@ def test_favorite_duplicate_message_is_about_favorite(client, temp_user):
     client.delete(f"/api/favorite/{NEWS_ID}", headers=headers)
 
     first = client.post("/api/favorite", json={"newsId": NEWS_ID}, headers=headers)
-    assert first.status_code == 200
+    assert first.status_code == 201
+    assert first.headers["Location"] == f"/api/favorite/{NEWS_ID}"
 
     second = client.post("/api/favorite", json={"newsId": NEWS_ID}, headers=headers)
-    assert second.status_code == 400
+    assert second.status_code == 409
     message = second.json()["message"]
     assert "收藏" in message
     assert "用户名" not in message

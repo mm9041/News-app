@@ -20,6 +20,8 @@ from schemas.ai import (
     ConversationItemResponse,
     ConversationListResponse,
 )
+from schemas.common import ApiResponse
+from utils.api_docs import AI_ERRORS
 from utils.auth import get_current_user
 from utils.logger import get_logger
 from utils.pagination import MAX_PAGE_SIZE, calc_has_more
@@ -157,7 +159,7 @@ async def _save_chat_record(user_id: int, message: str, response: str, conversat
         logger.error("保存 AI 聊天记录失败：%s", e)
 
 
-@router.post("/chat")
+@router.post("/chat", responses=AI_ERRORS)
 async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
     """把大模型请求代理到服务端，并把这一轮问答记到 ai_chat 表。
 
@@ -232,7 +234,7 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
     )
 
 
-@router.get("/history")
+@router.get("/history", response_model=ApiResponse[AiChatListResponse], responses=AI_ERRORS)
 async def get_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
@@ -257,17 +259,32 @@ async def get_history(
 # ---------------------------------------------------------------- 会话管理
 
 
-@router.post("/conversations")
+@router.post(
+    "/conversations",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ApiResponse[ConversationItemResponse],
+    responses=AI_ERRORS,
+)
 async def create_conversation(
     data: ConversationCreateRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_database),
 ):
     conv = await ai_chat.create_conversation(db, user.id, data.title or "新对话")
-    return success_response(data={"id": conv.id, "title": conv.title}, message="创建成功")
+    return success_response(
+        data=ConversationItemResponse(
+            id=conv.id,
+            title=conv.title,
+            message_count=0,
+            updated_at=conv.updated_at,
+        ),
+        message="创建成功",
+        status_code=status.HTTP_201_CREATED,
+        headers={"Location": f"/api/ai/conversations/{conv.id}"},
+    )
 
 
-@router.get("/conversations")
+@router.get("/conversations", response_model=ApiResponse[ConversationListResponse], responses=AI_ERRORS)
 async def list_conversations(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
@@ -291,7 +308,11 @@ async def list_conversations(
     return success_response(data=data, message="获取会话列表成功")
 
 
-@router.get("/conversations/{conversation_id}")
+@router.get(
+    "/conversations/{conversation_id}",
+    response_model=ApiResponse[ConversationDetailResponse],
+    responses=AI_ERRORS,
+)
 async def get_conversation(
     conversation_id: int,
     user: User = Depends(get_current_user),
@@ -307,7 +328,7 @@ async def get_conversation(
     return success_response(data=data, message="获取会话成功")
 
 
-@router.delete("/conversations/{conversation_id}")
+@router.delete("/conversations/{conversation_id}", response_model=ApiResponse[None], responses=AI_ERRORS)
 async def delete_conversation(
     conversation_id: int,
     user: User = Depends(get_current_user),

@@ -110,7 +110,7 @@ const load = async (reset = false) => {
 const openItem = async item => {
   if (!item.isRead) {
     try {
-      await http.put(`/api/notification/${item.id}/read`)
+      await http.patch(`/api/notification/${item.id}`, { isRead: true })
       item.isRead = true
       unread.value = Math.max(0, unread.value - 1)
     } catch (error) {
@@ -122,7 +122,7 @@ const openItem = async item => {
 
 const markAllRead = async () => {
   try {
-    await http.put('/api/notification/read-all')
+    await http.patch('/api/notification', { isRead: true })
     list.value = list.value.map(item => ({ ...item, isRead: true }))
     unread.value = 0
     showToast('已全部标记为已读')

@@ -108,7 +108,7 @@ const toggleBan = async user => {
   }
 
   try {
-    await http.put(`/api/admin/users/${user.id}/ban`, { banned: banning })
+    await http.patch(`/api/admin/users/${user.id}`, { banned: banning })
     user.banned = banning
     showToast(banning ? '已禁用' : '已解禁')
   } catch (error) {
@@ -128,7 +128,7 @@ const toggleAdmin = async user => {
   }
 
   try {
-    await http.put(`/api/admin/users/${user.id}/admin`, { isAdmin: granting })
+    await http.patch(`/api/admin/users/${user.id}`, { isAdmin: granting })
     user.isAdmin = granting
     showToast('已更新')
   } catch (error) {

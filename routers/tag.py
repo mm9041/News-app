@@ -6,14 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.db_conf import get_database
 from crud import tag as tag_crud
 from schemas.base import NewsItemBase
-from schemas.tag import TagBrief, TagNewsResponse
+from schemas.common import ApiResponse
+from schemas.tag import TagBrief, TagHotItem, TagNewsResponse
+from utils.api_docs import PUBLIC_READ_ERRORS
 from utils.pagination import MAX_PAGE_SIZE, calc_has_more
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/tag", tags=["tag"])
 
 
-@router.get("/hot")
+@router.get("/hot", response_model=ApiResponse[list[TagHotItem]], responses=PUBLIC_READ_ERRORS)
 async def list_hot_tags(
     limit: int = Query(20, ge=1, le=50),
     db: AsyncSession = Depends(get_database),
@@ -24,7 +26,7 @@ async def list_hot_tags(
     return success_response(data=data, message="获取标签成功")
 
 
-@router.get("/{tag_id}/news")
+@router.get("/{tag_id}/news", response_model=ApiResponse[TagNewsResponse], responses=PUBLIC_READ_ERRORS)
 async def list_news_by_tag(
     tag_id: int,
     page: int = Query(1, ge=1),

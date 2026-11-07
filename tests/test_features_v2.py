@@ -23,7 +23,8 @@ def news_with_tags(client, admin_user):
         },
         headers=_auth(admin_user),
     )
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 201, resp.text
+    assert resp.headers["Location"] == f"/api/admin/news/{resp.json()['data']['id']}"
     data = resp.json()["data"]
     news_id = data["id"]
 
@@ -47,7 +48,7 @@ def test_reply_nests_under_parent(client, news_with_tags, other_user, temp_user)
         json={"newsId": news_id, "content": "我来回复", "parentId": root},
         headers=_auth(temp_user),
     )
-    assert reply.status_code == 200, reply.text
+    assert reply.status_code == 201, reply.text
 
     data = client.get("/api/comment", params={"newsId": news_id}, headers=_auth(other_user)).json()["data"]
     item = next(i for i in data["list"] if i["id"] == root)

@@ -29,7 +29,8 @@ def _list(client, token=None, news_id=NEWS_ID):
 @pytest.fixture
 def comment(client, other_user):
     resp = _add(client, other_user["token"], "pytest 评论内容")
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 201, resp.text
+    assert resp.headers["Location"] == f"/api/comment/{resp.json()['data']['id']}"
     comment_id = resp.json()["data"]["id"]
 
     yield {"id": comment_id, "token": other_user["token"], "user_id": other_user["user_id"]}
@@ -45,7 +46,7 @@ def test_add_requires_login(client):
 
 def test_add_and_list(client, temp_user):
     resp = _add(client, temp_user["token"], "列表里应该能看到我")
-    assert resp.status_code == 200
+    assert resp.status_code == 201
     comment_id = resp.json()["data"]["id"]
 
     try:

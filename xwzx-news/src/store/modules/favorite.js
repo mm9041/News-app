@@ -67,7 +67,7 @@ export const useFavoriteStore = defineStore('favorite', {
         this.loading = true;
         const response = await http.post('/api/favorite', { newsId });
         
-        if (response.data.code === 200) {
+        if ([200, 201].includes(response.data.code)) {
           return { success: true, data: response.data.data };
         } else {
           return { success: false, message: response.data.message || '收藏失败' };

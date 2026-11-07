@@ -10,6 +10,10 @@ class TagBrief(BaseModel):
     name: str
 
 
+class TagHotItem(TagBrief):
+    count: int
+
+
 class TagNewsResponse(BaseModel):
     """某个标签下的新闻列表。"""
 

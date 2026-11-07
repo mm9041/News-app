@@ -6,7 +6,9 @@ from config.db_conf import get_database
 from crud import history
 from crud.news_cache import news_exists
 from models.users import User
+from schemas.common import ApiResponse
 from schemas.history import HistoryAddRequest, HistoryListResponse, HistoryNewsItemResponse
+from utils.api_docs import AUTHENTICATED_ERRORS
 from utils.auth import get_current_user
 from utils.pagination import MAX_PAGE_SIZE, calc_has_more
 from utils.response import success_response
@@ -14,7 +16,7 @@ from utils.response import success_response
 router = APIRouter(prefix="/api/history", tags=["history"])
 
 
-@router.post("")
+@router.post("", response_model=ApiResponse[dict], responses=AUTHENTICATED_ERRORS)
 async def add_history(
     data: HistoryAddRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)
 ):
@@ -29,7 +31,7 @@ async def add_history(
     return success_response(message="添加成功", data=result)
 
 
-@router.get("")
+@router.get("", response_model=ApiResponse[HistoryListResponse], responses=AUTHENTICATED_ERRORS)
 async def get_history_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
@@ -68,7 +70,7 @@ async def get_history_list(
     return success_response(data=data)
 
 
-@router.delete("/{news_id}")
+@router.delete("/{news_id}", response_model=ApiResponse[None], responses=AUTHENTICATED_ERRORS)
 async def delete_history(
     news_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)
 ):
@@ -84,7 +86,7 @@ async def delete_history(
     return success_response(message="删除成功")
 
 
-@router.delete("")
+@router.delete("", response_model=ApiResponse[None], responses=AUTHENTICATED_ERRORS)
 async def clear_history(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)):
     """
     清空历史记录

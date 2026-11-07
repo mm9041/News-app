@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_404_NOT_FOUND
 
@@ -7,21 +7,25 @@ from crud import favorite
 from crud.favorite import add_news_favorite, is_news_favorite, remove_news_favorite
 from crud.news_cache import news_exists
 from models.users import User
+from schemas.common import ApiResponse
 from schemas.favorite import (
     FavoriteAddRequest,
     FavoriteCheckResponse,
+    FavoriteCreateResponse,
     FavoriteListResponse,
     FavoriteNewsItemResponse,
     FavoriteRemoveResponse,
 )
+from utils.api_docs import documented_errors
 from utils.auth import get_current_user
 from utils.pagination import MAX_PAGE_SIZE, calc_has_more
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/favorite", tags=["favorite"])
+FAVORITE_ERRORS = documented_errors(401, 403, 404, 409, 422)
 
 
-@router.get("/{news_id}")
+@router.get("/{news_id}", response_model=ApiResponse[FavoriteCheckResponse], responses=FAVORITE_ERRORS)
 async def check_favorite(
     news_id: int = Path(..., ge=1),
     user: User = Depends(get_current_user),
@@ -31,7 +35,12 @@ async def check_favorite(
     return success_response(message="检查收藏状态成功", data=FavoriteCheckResponse(is_favorite=is_favorite))
 
 
-@router.post("")
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ApiResponse[FavoriteCreateResponse],
+    responses=FAVORITE_ERRORS,
+)
 async def add_favorite(
     data: FavoriteAddRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)
 ):
@@ -40,10 +49,15 @@ async def add_favorite(
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="新闻不存在")
 
     result = await add_news_favorite(db, user.id, data.news_id)
-    return success_response(message="添加收藏成功", data=result)
+    return success_response(
+        message="添加收藏成功",
+        data=FavoriteCreateResponse.model_validate(result),
+        status_code=status.HTTP_201_CREATED,
+        headers={"Location": f"/api/favorite/{data.news_id}"},
+    )
 
 
-@router.delete("/{news_id}")
+@router.delete("/{news_id}", response_model=ApiResponse[FavoriteRemoveResponse], responses=FAVORITE_ERRORS)
 async def remove_favorite(
     news_id: int = Path(..., ge=1),
     user: User = Depends(get_current_user),
@@ -61,7 +75,7 @@ async def remove_favorite(
     )
 
 
-@router.get("")
+@router.get("", response_model=ApiResponse[FavoriteListResponse], responses=FAVORITE_ERRORS)
 async def get_favorite_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
@@ -93,7 +107,7 @@ async def get_favorite_list(
     )
 
 
-@router.delete("")
+@router.delete("", response_model=ApiResponse[None], responses=FAVORITE_ERRORS)
 async def clear_favorite_route(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)):
     count = await favorite.remove_all_favorites(db, user.id)
     return success_response(message=f"清空了{count}条记录")

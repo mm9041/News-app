@@ -116,7 +116,10 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 
 ## 接口一览
 
-所有响应统一为 `{code, message, data}`，参数错误（422）、未登录（401）、限流（429）也走这个结构。
+所有业务响应统一为 `{code, message, data}`。成功时 HTTP 状态码与 `code` 一致：
+创建资源返回 **201** 并通过 `Location` 指向新资源；删除、更新返回 200；
+参数错误、未登录、权限不足、不存在、唯一约束冲突和限流分别返回
+**422 / 401 / 403 / 404 / 409 / 429**。这些错误均已写入 OpenAPI。
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
@@ -124,49 +127,63 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | GET | `/api/news?categoryId&page&pageSize` | 否 | 列表，按发布时间倒序 |
 | GET | `/api/news/search?keyword&page&pageSize` | 否 | 全文搜索（标题/摘要/正文） |
 | GET | `/api/news/suggest?keyword` | 否 | 搜索联想（标题前缀，最多 10 条） |
-| GET | `/api/news/{id}` | 否 | 详情 + 相关推荐 + 点赞状态，并把阅读量 +1 |
+| GET | `/api/news/{news_id}` | 否 | 详情 + 相关推荐 + 点赞状态，并把阅读量 +1 |
 | GET | `/api/news/recommend?limit` | 否 | 猜你喜欢；登录后按兴趣推荐，游客给热门 |
 | PUT | `/api/news/{news_id}/like` | 是 | 点赞（幂等） |
 | DELETE | `/api/news/{news_id}/like` | 是 | 取消点赞（幂等） |
 | GET | `/api/comment?newsId&page&pageSize` | 否 | 一级评论分页，每条带出回复 |
-| POST | `/api/comment` | 是 | 发表评论 / 回复（传 `parentId`） |
+| POST | `/api/comment` | 是 | 发表评论 / 回复（传 `parentId`），返回 201 |
 | DELETE | `/api/comment/{comment_id}` | 是 | 删除评论（本人或管理员，级联删回复） |
 | GET | `/api/tag/hot?limit` | 否 | 标签墙（按引用次数） |
 | GET | `/api/tag/{tag_id}/news?page` | 否 | 某标签下的新闻 |
 | GET | `/api/source/{source_id}/news?page` | 否 | 某报纸来源下的新闻 |
 | GET/POST/DELETE | `/api/follow*` | 部分 | 关注作者：关注/取关/状态/我关注的作者（需登录）、作者新闻（公开） |
-| POST | `/api/upload/image` | 是 | 上传图片（≤5MB，JPG/PNG/GIF/WebP） |
+| POST | `/api/upload/image` | 是 | 上传图片（≤5MB，JPG/PNG/GIF/WebP），返回 201 |
 | GET | `/api/notification?page&pageSize` | 是 | 通知列表，附带未读数 |
 | GET | `/api/notification/unread-count` | 是 | 未读数 |
-| PUT | `/api/notification/{notification_id}/read` | 是 | 单条标记已读 |
-| PUT | `/api/notification/read-all` | 是 | 全部已读 |
-| POST | `/api/user/register` | 否 | 注册（限 5 次/分/IP） |
+| PATCH | `/api/notification/{notification_id}` | 是 | 更新通知状态，body `{"isRead": true}` |
+| PATCH | `/api/notification` | 是 | 全部标记已读，body `{"isRead": true}` |
+| POST | `/api/user/register` | 否 | 注册（限 5 次/分/IP），返回 201 |
 | POST | `/api/user/login` | 否 | 登录（限 10 次/分/IP） |
 | GET | `/api/user/me` | 是 | 当前用户 |
-| PATCH | `/api/user` | 是 | 改昵称/头像/简介 |
+| PATCH | `/api/user/me` | 是 | 部分更新昵称/头像/简介 |
 | PUT | `/api/user/password` | 是 | 改密码（限 5 次/分） |
 | POST | `/api/user/logout` | 否 | 退出：删除库里的 token 行 + 清 cookie |
-| GET/POST/DELETE | `/api/favorite[/{newsId}]` | 是 | 收藏检查/增删/列表/清空 |
-| GET/POST/DELETE | `/api/history[/{newsId}]` | 是 | 历史增删/列表/清空 |
+| GET/POST/DELETE | `/api/favorite[/{news_id}]` | 是 | 收藏检查/新增（201）/删除/列表/清空 |
+| GET/POST/DELETE | `/api/history[/{news_id}]` | 是 | 历史新增/列表/删除/清空 |
 | POST | `/api/ai/chat` | 是 | AI 对话（SSE），限 20 次/分 |
 | GET | `/api/ai/history?page&pageSize` | 是 | 聊天记录（倒序） |
-| POST | `/api/ai/conversations` | 是 | 新建会话 |
+| POST | `/api/ai/conversations` | 是 | 新建会话，返回 201 |
 | GET | `/api/ai/conversations?page` | 是 | 会话列表（只含有消息的） |
 | GET | `/api/ai/conversations/{conversation_id}` | 是 | 会话的消息流 |
 | DELETE | `/api/ai/conversations/{conversation_id}` | 是 | 删除会话（级联删消息） |
 | GET | `/api/admin/news?page&pageSize&keyword` | 管理员 | 后台新闻列表（**含正文**） |
 | GET | `/api/admin/news/{news_id}` | 管理员 | 单条详情（编辑回填用） |
-| POST | `/api/admin/news` | 管理员 | 新建新闻 |
+| POST | `/api/admin/news` | 管理员 | 新建新闻，返回 201 |
 | PUT | `/api/admin/news/{news_id}` | 管理员 | 更新（PUT 语义，整份覆盖） |
 | DELETE | `/api/admin/news/{news_id}` | 管理员 | 删除 |
 | GET | `/api/admin/stats?days&top` | 管理员 | 看板：总览 / 趋势 / 分类 / 热门 |
 | GET | `/api/admin/users?page&pageSize&keyword` | 管理员 | 用户列表（带评论数） |
-| PUT | `/api/admin/users/{user_id}/ban` | 管理员 | 禁用 / 解禁 |
-| PUT | `/api/admin/users/{user_id}/admin` | 管理员 | 设置 / 取消管理员 |
+| PATCH | `/api/admin/users/{user_id}` | 管理员 | 部分更新 `banned` / `isAdmin` |
 | DELETE | `/api/admin/users/{user_id}` | 管理员 | 删除用户（级联清其数据） |
 
 不在 `/api` 前缀下的三个：`GET /`（占位，返回 Hello World）、`GET /health`（依赖探测）、
 `GET /metrics`（Prometheus 文本，默认仅本机可访问）。
+
+旧客户端的 `PATCH /api/user`、通知的 `PUT .../read`、`PUT .../read-all` 以及后台
+`PUT .../ban`、`PUT .../admin` 仍在运行时保留，但已从 OpenAPI 隐藏，新代码应使用上表路径。
+
+### REST 约定与保留的 RPC 风格
+
+- 新闻、评论、收藏、历史、AI 会话使用「集合 + `/{id}`」资源路径；点赞用幂等的
+  `PUT/DELETE /api/news/{id}/like`，创建用 `POST` + 201 + `Location`。
+- 登录、登出、AI 对话、上传等接口天然具有命令语义，保留为动作式端点，这是常见的
+  pragmatic REST 取舍，不为了形式纯度额外包一层虚假资源。
+- 当前前缀仍有单复数混用（`/api/comment`、`/api/user` 等）。全量改名会破坏现有前端、
+  脚本和测试，因此不在本轮做；若未来对外开放 API，应在 `/api/v2` 中统一为复数资源，
+  并让旧路径以 Deprecated alias 过渡。
+- 删除接口仍返回 200 + 统一响应体，没有改成 204，因为前端和测试依赖 `message` /
+  `data` 判断结果；这是有意保留的契约。
 
 鉴权：浏览器走 **httpOnly cookie**（登录/注册时下发 `access_token`，JS 读不到，XSS 偷不走）；
 脚本 / curl 仍可用 `Authorization: <token>`（带不带 `Bearer ` 前缀都行）。两条通道都支持。
@@ -200,7 +217,7 @@ python scripts/make_admin.py <用户名>
   后台改/删新闻会同时清掉这两个 key。
 - **认证**：`user_token` 只存 `sha256(token)`，明文只在登录/注册响应里返回一次；7 天有效；每用户一条，重新登录会顶掉旧 token（多端互踢）。
   浏览器端 token 放在 **httpOnly + SameSite=Lax** 的 cookie 里（`access_token`），前端不再写 localStorage，
-  启动时靠 `GET /api/user/info` 探活恢复登录态；`POST /api/user/logout` 会删库里的 token 行并清 cookie。
+  启动时靠 `GET /api/user/me` 探活恢复登录态；`POST /api/user/logout` 会删库里的 token 行并清 cookie。
   开发态前端必须走 Vite 的 `server.proxy`（见 `vite.config.js`）保持同源，否则跨站请求不会带 Lax cookie。
 - **限流**：基于 Redis 的滑动窗口（ZSET + Lua，判断与写入在同一段脚本里），Redis 故障时放行（保护措施不能把业务拦死）。
 - **健康检查**：`GET /health` 把 MySQL 当硬依赖（挂了返回 503），Redis 当可选的加速层（挂了只标 `degraded`、仍返回 200，否则负载均衡会把功能完全正常的实例摘掉）；需要「Redis 也必须活」的探针用 `GET /health?strict=true`。
@@ -316,5 +333,5 @@ python -m alembic check                      # 模型与库是否一致（可进
 - **回写任务是单进程假设**：`main.py` 里的后台任务在多 worker 部署时会重复扫同一批增量，需要加分布式锁。
 - **限流按 IP**：本地直连时读 `request.client.host`；容器里 uvicorn 开了 `--proxy-headers`，
   反代后能拿到真实 IP，但 `--forwarded-allow-ips=*` 信任所有来源，**后端不能直接暴露公网**。
-- **前端分页号取自 `newsList.length`**：`store/modules/news.js` 用
-  `Math.ceil(length / 10) + 1` 算下一页，一旦有重复条目就会算错页；只支持顺序加载，不适合跳页。
+- **前端新闻列表只支持顺序加载**：`store/modules/news.js` 用显式 `page` 加
+  `requestSeq` 推进分页并丢弃旧请求，不支持任意跳页；跳页需要后端提供稳定游标或独立页码查询。

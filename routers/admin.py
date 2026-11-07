@@ -21,8 +21,11 @@ from schemas.admin import (
     AdminStatsResponse,
     AdminUserItemResponse,
     AdminUserListResponse,
+    AdminUserPatchRequest,
     BanRequest,
 )
+from schemas.common import ApiResponse
+from utils.api_docs import ADMIN_ERRORS
 from utils.auth import get_current_admin
 from utils.pagination import MAX_PAGE_SIZE, calc_has_more
 from utils.response import success_response
@@ -42,7 +45,7 @@ async def _with_tags(db: AsyncSession, news) -> AdminNewsItemResponse:
     return data
 
 
-@router.get("/news")
+@router.get("/news", response_model=ApiResponse[AdminNewsListResponse], responses=ADMIN_ERRORS)
 async def list_news(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
@@ -59,7 +62,7 @@ async def list_news(
     return success_response(data=data, message="获取新闻列表成功")
 
 
-@router.get("/news/{news_id}")
+@router.get("/news/{news_id}", response_model=ApiResponse[AdminNewsItemResponse], responses=ADMIN_ERRORS)
 async def get_news(news_id: int, db: AsyncSession = Depends(get_database)):
     news = await admin_news.get_news(db, news_id)
     if not news:
@@ -67,17 +70,27 @@ async def get_news(news_id: int, db: AsyncSession = Depends(get_database)):
     return success_response(data=await _with_tags(db, news), message="获取新闻成功")
 
 
-@router.post("/news")
+@router.post(
+    "/news",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ApiResponse[AdminNewsItemResponse],
+    responses=ADMIN_ERRORS,
+)
 async def create_news(
     data: AdminNewsUpsertRequest,
     user: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_database),
 ):
     news = await admin_news.create_news(db, data, user.id)
-    return success_response(data=await _with_tags(db, news), message="创建成功")
+    return success_response(
+        data=await _with_tags(db, news),
+        message="创建成功",
+        status_code=status.HTTP_201_CREATED,
+        headers={"Location": f"/api/admin/news/{news.id}"},
+    )
 
 
-@router.put("/news/{news_id}")
+@router.put("/news/{news_id}", response_model=ApiResponse[AdminNewsItemResponse], responses=ADMIN_ERRORS)
 async def update_news(news_id: int, data: AdminNewsUpsertRequest, db: AsyncSession = Depends(get_database)):
     news = await admin_news.get_news(db, news_id)
     if not news:
@@ -87,7 +100,7 @@ async def update_news(news_id: int, data: AdminNewsUpsertRequest, db: AsyncSessi
     return success_response(data=await _with_tags(db, news), message="更新成功")
 
 
-@router.delete("/news/{news_id}")
+@router.delete("/news/{news_id}", response_model=ApiResponse[None], responses=ADMIN_ERRORS)
 async def delete_news(news_id: int, db: AsyncSession = Depends(get_database)):
     news = await admin_news.get_news(db, news_id)
     if not news:
@@ -97,7 +110,7 @@ async def delete_news(news_id: int, db: AsyncSession = Depends(get_database)):
     return success_response(message="删除成功")
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=ApiResponse[AdminStatsResponse], responses=ADMIN_ERRORS)
 async def get_stats(
     days: int = Query(7, ge=1, le=30, description="趋势天数"),
     top: int = Query(10, ge=1, le=20, description="热门新闻条数"),
@@ -118,7 +131,7 @@ async def get_stats(
 # ---------------------------- 用户管理 ----------------------------
 
 
-@router.get("/users")
+@router.get("/users", response_model=ApiResponse[AdminUserListResponse], responses=ADMIN_ERRORS)
 async def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=MAX_PAGE_SIZE, alias="pageSize"),
@@ -148,43 +161,68 @@ async def list_users(
     return success_response(data=data, message="获取用户列表成功")
 
 
-@router.put("/users/{user_id}/ban")
-async def ban_user(
+async def _patch_user(user_id: int, data: AdminUserPatchRequest, admin: User, db: AsyncSession):
+    if user_id == admin.id and data.banned:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能禁用自己")
+    if user_id == admin.id and data.is_admin is False:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能取消自己的管理员权限")
+
+    values = {}
+    if data.banned is not None:
+        values["status"] = 1 if data.banned else 0
+    if data.is_admin is not None:
+        values["is_admin"] = data.is_admin
+
+    result = await db.execute(update(User).where(User.id == user_id).values(**values))
+    await db.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+
+    changed = []
+    if data.banned is not None:
+        changed.append("已禁用" if data.banned else "已解禁")
+    if data.is_admin is not None:
+        changed.append("已设为管理员" if data.is_admin else "已取消管理员")
+    return success_response(message="，".join(changed))
+
+
+@router.patch("/users/{user_id}", response_model=ApiResponse[None], responses=ADMIN_ERRORS)
+async def patch_user(
+    user_id: int,
+    data: AdminUserPatchRequest,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_database),
+):
+    """更新用户状态。PATCH 只修改提供的字段。"""
+
+    return await _patch_user(user_id, data, admin, db)
+
+
+@router.put("/users/{user_id}/ban", include_in_schema=False, deprecated=True)
+async def ban_user_legacy(
     user_id: int,
     data: BanRequest,
     admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_database),
 ):
-    if user_id == admin.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能禁用自己")
+    """兼容旧客户端，新代码使用 PATCH /api/admin/users/{user_id}。"""
 
-    result = await db.execute(update(User).where(User.id == user_id).values(status=1 if data.banned else 0))
-    await db.commit()
-    if result.rowcount == 0:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
-
-    return success_response(message="已禁用" if data.banned else "已解禁")
+    return await _patch_user(user_id, AdminUserPatchRequest(banned=data.banned), admin, db)
 
 
-@router.put("/users/{user_id}/admin")
-async def set_user_admin(
+@router.put("/users/{user_id}/admin", include_in_schema=False, deprecated=True)
+async def set_user_admin_legacy(
     user_id: int,
     data: AdminFlagRequest,
     admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_database),
 ):
-    if user_id == admin.id and not data.is_admin:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能取消自己的管理员权限")
+    """兼容旧客户端，新代码使用 PATCH /api/admin/users/{user_id}。"""
 
-    result = await db.execute(update(User).where(User.id == user_id).values(is_admin=data.is_admin))
-    await db.commit()
-    if result.rowcount == 0:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
-
-    return success_response(message="已设为管理员" if data.is_admin else "已取消管理员")
+    return await _patch_user(user_id, AdminUserPatchRequest(is_admin=data.is_admin), admin, db)
 
 
-@router.delete("/users/{user_id}")
+@router.delete("/users/{user_id}", response_model=ApiResponse[None], responses=ADMIN_ERRORS)
 async def delete_user(
     user_id: int,
     admin: User = Depends(get_current_admin),

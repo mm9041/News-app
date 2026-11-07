@@ -41,3 +41,29 @@ def test_metrics_rejects_forwarded_request_without_token(client, monkeypatch):
 
     resp = client.get("/metrics", headers={"X-Forwarded-For": "127.0.0.1"})
     assert resp.status_code == 403
+
+
+def test_openapi_documents_rest_contract(client):
+    """文档必须反映真实资源路径、创建状态码和常见错误。"""
+    assert client.get("/docs").status_code == 200
+    spec = client.get("/openapi.json").json()
+
+    assert spec["info"]["title"] == "新闻资讯 API"
+    assert spec["info"]["version"] == "1.0.0"
+
+    paths = spec["paths"]
+    assert "patch" in paths["/api/user/me"]
+    assert "/api/user" not in paths, "旧 PATCH 别名只保留运行时兼容，不应继续污染文档"
+    assert "patch" in paths["/api/notification/{notification_id}"]
+    assert "/api/notification/{notification_id}/read" not in paths
+    assert "patch" in paths["/api/admin/users/{user_id}"]
+    assert "/api/admin/users/{user_id}/ban" not in paths
+
+    register = paths["/api/user/register"]["post"]
+    assert "201" in register["responses"]
+    assert "409" in register["responses"]
+    assert register["operationId"] == "user_post_api_user_register"
+
+    favorite = paths["/api/favorite"]["post"]
+    assert "201" in favorite["responses"]
+    assert "409" in favorite["responses"]

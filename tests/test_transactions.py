@@ -18,7 +18,7 @@ def _auth(user):
 def _create_news(client, admin_user, title: str) -> int:
     payload = {"title": title, "content": "正文", "categoryId": 1}
     resp = client.post("/api/admin/news", json=payload, headers=_auth(admin_user))
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 201, resp.text
     return resp.json()["data"]["id"]
 
 
@@ -74,7 +74,7 @@ def test_admin_accepts_tag_at_length_limit(client, admin_user, db):
         "tags": [tag],
     }
     resp = client.post("/api/admin/news", json=payload, headers=_auth(admin_user))
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 201, resp.text
     assert resp.json()["data"]["tags"] == [tag]
 
     news_id = resp.json()["data"]["id"]
@@ -103,7 +103,7 @@ def test_comment_survives_notification_failure(client, admin_user, temp_user, db
             json={"newsId": news_id, "content": "通知失败也不影响评论"},
             headers=_auth(temp_user),
         )
-        assert resp.status_code == 200, resp.text
+        assert resp.status_code == 201, resp.text
 
         with db.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM news_comment WHERE news_id=%s", (news_id,))

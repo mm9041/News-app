@@ -18,7 +18,8 @@ def test_create_and_detail(client, temp_user):
     headers = _auth(temp_user)
 
     resp = client.post("/api/ai/conversations", json={"title": "测试会话"}, headers=headers)
-    assert resp.status_code == 200
+    assert resp.status_code == 201
+    assert resp.headers["Location"] == f"/api/ai/conversations/{resp.json()['data']['id']}"
     conv_id = resp.json()["data"]["id"]
 
     detail = client.get(f"/api/ai/conversations/{conv_id}", headers=headers).json()["data"]

@@ -34,3 +34,13 @@ class FavoriteListResponse(BaseModel):
 
 class FavoriteRemoveResponse(BaseModel):
     removed: bool
+
+
+class FavoriteCreateResponse(BaseModel):
+    """创建收藏后返回的资源摘要。"""
+
+    id: int
+    news_id: int = Field(alias="newsId")
+    created_at: datetime = Field(alias="createdAt")
+
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)

@@ -29,3 +29,10 @@ class FollowAuthorNewsResponse(BaseModel):
     author: str
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class FollowedAuthorItem(BaseModel):
+    name: str
+    news_count: int = Field(alias="newsCount")
+
+    model_config = ConfigDict(populate_by_name=True)

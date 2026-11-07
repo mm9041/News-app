@@ -1,8 +1,17 @@
 """通知的请求/响应模型。"""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class NotificationReadRequest(BaseModel):
+    """PATCH 通知时只暴露已读状态，避免把更新接口做成任意字段覆盖。"""
+
+    is_read: Literal[True] = Field(alias="isRead")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class NotificationActor(BaseModel):

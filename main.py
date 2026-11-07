@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -13,6 +14,7 @@ from cache import view_counter
 from config.db_conf import AsyncSessionLocal
 from crud.news_views import flush_view_deltas
 from routers import admin, ai, comment, favorite, follow, history, news, notification, source, tag, upload, users
+from utils.api_docs import setup_openapi
 from utils.exception_handlers import register_exception_handlers
 from utils.logger import get_logger, setup_logging
 from utils.metrics import MetricsMiddleware, render_metrics
@@ -80,7 +82,58 @@ async def lifespan(app: FastAPI):
         await view_counter.close()
 
 
-app = FastAPI(lifespan=lifespan)
+API_DESCRIPTION = """
+移动端优先的新闻资讯 API。
+
+所有业务响应统一为 `{code, message, data}`：
+- 成功时 HTTP 状态码与 `code` 一致；
+- 创建资源返回 `201` 并通过 `Location` 指向新资源；
+- 参数错误、未登录、权限不足、资源不存在、冲突和限流分别返回
+  `422 / 401 / 403 / 404 / 409 / 429`。
+
+认证支持两种方式：浏览器使用 httpOnly Cookie `access_token`，
+脚本和测试可使用 `Authorization` 请求头，裸 token 或 `Bearer token` 均可。
+"""
+
+OPENAPI_TAGS = [
+    {"name": "news", "description": "新闻列表、搜索、详情、推荐与点赞"},
+    {"name": "user", "description": "注册、登录、当前用户与资料修改"},
+    {"name": "favorite", "description": "新闻收藏"},
+    {"name": "history", "description": "浏览历史"},
+    {"name": "comment", "description": "两级评论与回复"},
+    {"name": "notification", "description": "评论/点赞的站内通知"},
+    {"name": "tag", "description": "标签与标签新闻"},
+    {"name": "follow", "description": "关注作者与作者新闻"},
+    {"name": "source", "description": "报纸来源与来源新闻"},
+    {"name": "ai", "description": "AI 对话、会话与聊天记录"},
+    {"name": "upload", "description": "图片上传"},
+    {"name": "admin", "description": "新闻、用户与统计管理"},
+]
+
+# /docs 的 Swagger UI 默认从 jsdelivr 加载，国内网络会 SSL 失败导致白屏。
+# FastAPI 构造函数没有 swagger_js_url/swagger_css_url 参数（会被静默忽略），
+# 必须禁用默认 /docs，再用 get_swagger_ui_html 自定义资源地址。
+app = FastAPI(
+    title="新闻资讯 API",
+    version="1.0.0",
+    description=API_DESCRIPTION,
+    openapi_tags=OPENAPI_TAGS,
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+)
+setup_openapi(app)
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - Swagger UI",
+        swagger_js_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.js",
+        swagger_css_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/5.17.14/swagger-ui.css",
+        swagger_ui_parameters={"persistAuthorization": True, "displayRequestDuration": True},
+    )
 
 # uvicorn main:app --reload
 # netstat -ano | findstr :8000
@@ -103,7 +156,8 @@ app.add_middleware(
     # 必须显式暴露自定义响应头，否则跨域时 fetch 读不到它：
     # AIChat.vue 靠 X-Conversation-Id 拿新建会话的 id，读不到就会在下一轮
     # 又开一个新会话（同源部署时不受影响，所以这个坑只在开发环境暴露）。
-    expose_headers=["X-Conversation-Id", "X-Request-ID"],
+    # Location 需要暴露给跨域客户端，否则创建资源后读不到新地址。
+    expose_headers=["X-Conversation-Id", "X-Request-ID", "Location"],
 )
 
 

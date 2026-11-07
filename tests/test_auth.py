@@ -102,16 +102,28 @@ def test_duplicate_username_is_rejected(client, temp_user):
         "/api/user/register",
         json={"username": temp_user["username"], "password": "Another123456"},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 409
+    assert resp.json()["code"] == 409
     assert "已存在" in resp.json()["message"]
 
 
 def test_update_profile_accepts_null_fields(client, temp_user):
     """v2 里 `field: str = None` 会让显式传 null 直接 422，这里盯住回归。"""
     resp = client.patch(
-        "/api/user",
+        "/api/user/me",
         json={"nickname": None, "bio": "pytest 简介"},
         headers={"Authorization": temp_user["token"]},
     )
     assert resp.status_code == 200
     assert resp.json()["data"]["bio"] == "pytest 简介"
+
+
+def test_legacy_user_patch_alias_still_works(client, temp_user):
+    """旧客户端仍可运行，但新代码应使用 /api/user/me。"""
+    resp = client.patch(
+        "/api/user",
+        json={"bio": "旧路径兼容"},
+        headers={"Authorization": temp_user["token"]},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["bio"] == "旧路径兼容"

@@ -123,13 +123,17 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
 
     detail = _integrity_detail(error_msg)
 
+    # 重复键是资源冲突，语义上应为 409；外键不存在仍是 400。
+    is_duplicate = "Duplicate entry" in error_msg
+    status_code = status.HTTP_409_CONFLICT if is_duplicate else status.HTTP_400_BAD_REQUEST
+
     # 开发模式下返回详细错误信息
     error_data = None
     if DEBUG_MODE:
         error_data = {"error_type": "IntegrityError", "error_detail": error_msg, "path": str(request.url)}
 
     return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST, content={"code": 400, "message": detail, "data": error_data}
+        status_code=status_code, content={"code": status_code, "message": detail, "data": error_data}
     )
 
 

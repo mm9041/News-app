@@ -41,7 +41,8 @@ def created_news(client, admin_user):
         json=_payload(title),
         headers={"Authorization": admin_user["token"]},
     )
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 201, resp.text
+    assert resp.headers["Location"] == f"/api/admin/news/{resp.json()['data']['id']}"
     news_id = resp.json()["data"]["id"]
 
     yield {"id": news_id, "title": title, "token": admin_user["token"]}
@@ -104,6 +105,26 @@ def test_admin_forbidden_for_normal_user(client, temp_user):
     resp = client.get("/api/admin/news", headers={"Authorization": temp_user["token"]})
     assert resp.status_code == 403
     assert "管理员" in resp.json()["message"]
+
+
+def test_admin_patch_user_status(client, admin_user, temp_user):
+    """PATCH 只改传入字段；旧的 /ban、/admin 动作路径保留兼容但不再进文档。"""
+    admin_headers = {"Authorization": admin_user["token"]}
+    user_headers = {"Authorization": temp_user["token"]}
+    path = f"/api/admin/users/{temp_user['user_id']}"
+
+    try:
+        resp = client.patch(path, json={"banned": True}, headers=admin_headers)
+        assert resp.status_code == 200
+        assert client.get("/api/user/me", headers=user_headers).status_code == 403
+    finally:
+        resp = client.patch(path, json={"banned": False}, headers=admin_headers)
+        assert resp.status_code == 200
+
+    assert client.get("/api/user/me", headers=user_headers).status_code == 200
+
+    missing = client.patch(path, json={}, headers=admin_headers)
+    assert missing.status_code == 422
 
 
 # ---------------------------------------------------------------- CRUD

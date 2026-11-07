@@ -7,7 +7,9 @@ from config.db_conf import get_database
 from crud import follow as follow_crud
 from models.users import User
 from schemas.base import NewsItemBase
-from schemas.follow import FollowAuthorNewsResponse, FollowStatusResponse
+from schemas.common import ApiResponse
+from schemas.follow import FollowAuthorNewsResponse, FollowedAuthorItem, FollowStatusResponse
+from utils.api_docs import AUTHENTICATED_ERRORS, PUBLIC_READ_ERRORS
 from utils.auth import get_current_user
 from utils.pagination import MAX_PAGE_SIZE, calc_has_more
 from utils.response import success_response
@@ -15,7 +17,7 @@ from utils.response import success_response
 router = APIRouter(prefix="/api/follow", tags=["follow"])
 
 
-@router.post("")
+@router.post("", response_model=ApiResponse[FollowStatusResponse], responses=AUTHENTICATED_ERRORS)
 async def add_follow(
     name: str = Query(..., min_length=1, max_length=50, description="作者名"),
     user: User = Depends(get_current_user),
@@ -28,7 +30,7 @@ async def add_follow(
     )
 
 
-@router.delete("")
+@router.delete("", response_model=ApiResponse[FollowStatusResponse], responses=AUTHENTICATED_ERRORS)
 async def remove_follow(
     name: str = Query(..., min_length=1, max_length=50),
     user: User = Depends(get_current_user),
@@ -41,7 +43,7 @@ async def remove_follow(
     )
 
 
-@router.get("/status")
+@router.get("/status", response_model=ApiResponse[FollowStatusResponse], responses=AUTHENTICATED_ERRORS)
 async def follow_status(
     name: str = Query(..., min_length=1, max_length=50),
     user: User = Depends(get_current_user),
@@ -51,7 +53,7 @@ async def follow_status(
     return success_response(data=FollowStatusResponse(following=following), message="获取关注状态成功")
 
 
-@router.get("/authors")
+@router.get("/authors", response_model=ApiResponse[list[FollowedAuthorItem]], responses=AUTHENTICATED_ERRORS)
 async def list_followed_authors(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_database),
@@ -61,7 +63,7 @@ async def list_followed_authors(
     return success_response(data=authors, message="获取关注的作者成功")
 
 
-@router.get("/news")
+@router.get("/news", response_model=ApiResponse[FollowAuthorNewsResponse], responses=PUBLIC_READ_ERRORS)
 async def list_news_by_author(
     name: str = Query(..., min_length=1, max_length=50),
     page: int = Query(1, ge=1),

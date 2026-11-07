@@ -22,7 +22,7 @@ def published_news(client, admin_user):
         },
         headers=_auth(admin_user),
     )
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 201, resp.text
     news_id = resp.json()["data"]["id"]
 
     yield {"news_id": news_id, "admin": admin_user}
@@ -43,7 +43,7 @@ def test_comment_triggers_notification(client, published_news, other_user):
         json={"newsId": news_id, "content": "写得好"},
         headers=_auth(other_user),
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 201
 
     data = client.get("/api/notification", headers=_auth(published_news["admin"])).json()["data"]
     assert data["unread"] >= 1
@@ -96,13 +96,13 @@ def test_mark_read_and_mark_all(client, published_news, other_user):
 
     # 单条已读
     target = data["list"][0]["id"]
-    resp = client.put(f"/api/notification/{target}/read", headers=_auth(admin))
+    resp = client.patch(f"/api/notification/{target}", json={"isRead": True}, headers=_auth(admin))
     assert resp.status_code == 200
 
     assert client.get("/api/notification/unread-count", headers=_auth(admin)).json()["data"]["count"] == 1
 
     # 全部已读
-    client.put("/api/notification/read-all", headers=_auth(admin))
+    client.patch("/api/notification", json={"isRead": True}, headers=_auth(admin))
     assert client.get("/api/notification/unread-count", headers=_auth(admin)).json()["data"]["count"] == 0
 
 
@@ -114,7 +114,7 @@ def test_cannot_mark_others_notification(client, published_news, other_user):
     target = client.get("/api/notification", headers=_auth(admin)).json()["data"]["list"][0]["id"]
 
     # other_user 去标记 admin 的通知：条件里带 user_id，应该一条都命中不了
-    resp = client.put(f"/api/notification/{target}/read", headers=_auth(other_user))
+    resp = client.patch(f"/api/notification/{target}", json={"isRead": True}, headers=_auth(other_user))
     assert resp.json()["data"]["updated"] == 0
 
     # admin 那边仍然是未读

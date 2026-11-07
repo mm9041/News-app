@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.db_conf import get_database
 from crud import source as source_crud
 from schemas.base import NewsItemBase
+from schemas.common import ApiResponse
 from schemas.source import SourceBrief, SourceNewsResponse
+from utils.api_docs import PUBLIC_READ_ERRORS
 from utils.auth import get_optional_user
 from utils.pagination import MAX_PAGE_SIZE, calc_has_more
 from utils.response import success_response
@@ -14,7 +16,7 @@ from utils.response import success_response
 router = APIRouter(prefix="/api/source", tags=["source"])
 
 
-@router.get("/{source_id}/news")
+@router.get("/{source_id}/news", response_model=ApiResponse[SourceNewsResponse], responses=PUBLIC_READ_ERRORS)
 async def list_news_by_source(
     source_id: int,
     page: int = Query(1, ge=1),

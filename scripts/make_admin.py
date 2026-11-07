@@ -4,7 +4,7 @@
     python scripts/make_admin.py <username>            # 设为管理员
     python scripts/make_admin.py <username> --revoke   # 取消管理员
 
-改完让该用户重新登录一次：`/api/user/info` 会重新返回 `isAdmin`，
+改完让该用户重新登录一次：`/api/user/me` 会重新返回 `isAdmin`，
 前端据此显示「管理后台」入口。真正的权限校验在后端 `get_current_admin`。
 """
 

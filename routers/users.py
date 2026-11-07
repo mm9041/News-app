@@ -5,6 +5,7 @@ from config.db_conf import get_database
 from crud import users
 from crud.users import create_token, create_user, get_user_by_username, update_user
 from models.users import User
+from schemas.common import ApiResponse
 from schemas.users import (
     UserAuthResponse,
     UserChangePasswordRequest,
@@ -13,6 +14,7 @@ from schemas.users import (
     UserRequest,
     UserUpdateRequest,
 )
+from utils.api_docs import documented_errors
 from utils.auth import (
     TOKEN_COOKIE_NAME,
     clear_token_cookie,
@@ -24,26 +26,41 @@ from utils.rate_limit import client_ip, enforce
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/user", tags=["user"])
+USER_ERRORS = documented_errors(401, 403, 409, 422, 429)
 
 
-@router.post("/register")
+@router.post(
+    "/register",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ApiResponse[UserAuthResponse],
+    responses=documented_errors(409, 422, 429),
+)
 async def register(user_data: UserRegisterRequest, request: Request, db: AsyncSession = Depends(get_database)):
     # 防批量注册：同一 IP 每分钟最多 5 个账号
     await enforce(f"register:{client_ip(request)}", 5, 60, "注册过于频繁，请 1 分钟后再试")
     if await get_user_by_username(db, user_data.username):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户已存在")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="用户已存在")
     user = await create_user(db, user_data)
     token = await create_token(db, user.id)
     # 用户和令牌必须一起落库：token 写失败时回滚用户，否则该用户名会永久卡死
     await db.commit()
     response_data = UserAuthResponse(token=token, userInfo=UserInfoResponse.model_validate(user))
-    response = success_response(data=response_data, message="注册成功")
+    response = success_response(
+        data=response_data,
+        message="注册成功",
+        status_code=status.HTTP_201_CREATED,
+        headers={"Location": "/api/user/me"},
+    )
     # 同时下发 httpOnly cookie：浏览器后续请求自动带上，前端不用碰 token
     set_token_cookie(response, token)
     return response
 
 
-@router.post("/login")
+@router.post(
+    "/login",
+    response_model=ApiResponse[UserAuthResponse],
+    responses=documented_errors(401, 403, 422, 429),
+)
 async def login(user_data: UserRequest, request: Request, db: AsyncSession = Depends(get_database)):
     # 防暴力破解：同一 IP 每分钟最多 10 次尝试（成功与否都计数）
     await enforce(f"login:{client_ip(request)}", 10, 60, "登录尝试过于频繁，请 1 分钟后再试")
@@ -61,7 +78,7 @@ async def login(user_data: UserRequest, request: Request, db: AsyncSession = Dep
     return response
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=ApiResponse[None])
 async def logout(
     authorization: str | None = Header(None, alias="Authorization"),
     access_token: str | None = Cookie(None, alias=TOKEN_COOKIE_NAME),
@@ -80,14 +97,17 @@ async def logout(
     return response
 
 
-@router.get("/me")
+@router.get(
+    "/me",
+    response_model=ApiResponse[UserInfoResponse],
+    responses=documented_errors(401, 403),
+)
 async def get_user_info(user: User = Depends(get_current_user)):
     return success_response(data=UserInfoResponse.model_validate(user), message="获取用户信息成功")
 
 
-@router.patch("")
-async def update_user_info(
-    user_data: UserUpdateRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)
+async def _update_current_user(
+    user_data: UserUpdateRequest, user: User, db: AsyncSession
 ):
     updated = await update_user(db, user.username, user_data)
     if not updated:
@@ -95,7 +115,26 @@ async def update_user_info(
     return success_response(data=UserInfoResponse.model_validate(updated), message="更新用户信息成功")
 
 
-@router.put("/password")
+@router.patch(
+    "/me",
+    response_model=ApiResponse[UserInfoResponse],
+    responses=USER_ERRORS,
+)
+async def update_current_user(
+    user_data: UserUpdateRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)
+):
+    return await _update_current_user(user_data, user, db)
+
+
+@router.patch("", include_in_schema=False, deprecated=True)
+async def update_current_user_legacy(
+    user_data: UserUpdateRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_database)
+):
+    """兼容旧客户端的临时别名，新代码统一使用 PATCH /api/user/me。"""
+    return await _update_current_user(user_data, user, db)
+
+
+@router.put("/password", response_model=ApiResponse[None], responses=USER_ERRORS)
 async def update_password(
     password_data: UserChangePasswordRequest,
     user: User = Depends(get_current_user),
