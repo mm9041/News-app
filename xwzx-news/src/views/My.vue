@@ -46,11 +46,24 @@
       <van-cell-group inset>
         <van-cell :title="$t('my.myFavorite')" is-link @click="goToFavorite" />
         <van-cell :title="$t('my.browsingHistory')" is-link @click="goToHistory" />
-        <van-cell :title="$t('my.notifications')" is-link :badge="unreadCount > 0 ? unreadCount : ''" @click="goToNotifications" />
-        <van-cell v-if="userInfo?.isAdmin" title="新闻管理" is-link @click="goToAdminNews" />
-        <van-cell v-if="userInfo?.isAdmin" title="数据看板" is-link @click="goToDashboard" />
-        <van-cell v-if="userInfo?.isAdmin" title="用户管理" is-link @click="goToAdminUsers" />
-        <van-cell title="我的关注" is-link @click="goToFollow" />
+        <van-cell
+          :title="$t('my.notifications')"
+          is-link
+          @click="goToNotifications"
+        >
+          <template #value>
+            <span
+              v-if="notificationStore.hasUnread"
+              class="unread-badge"
+              role="status"
+              :aria-label="$t('my.unreadNotifications', { count: notificationStore.unreadCount })"
+            >{{ notificationStore.badgeText }}</span>
+          </template>
+        </van-cell>
+        <van-cell v-if="userInfo?.isAdmin" :title="$t('my.adminNews')" is-link @click="goToAdminNews" />
+        <van-cell v-if="userInfo?.isAdmin" :title="$t('my.adminDashboard')" is-link @click="goToDashboard" />
+        <van-cell v-if="userInfo?.isAdmin" :title="$t('my.adminUsers')" is-link @click="goToAdminUsers" />
+        <van-cell :title="$t('my.following')" is-link @click="goToFollow" />
         <van-cell :title="$t('my.settings')" is-link @click="goToSettings" />
         <van-cell v-if="isLogin" :title="$t('my.logout')" @click="handleLogout" />
       </van-cell-group>
@@ -66,37 +79,22 @@ import { useRouter } from 'vue-router';
 import { showDialog, showToast } from 'vant';
 import TabBar from '../components/TabBar.vue';
 import { useI18n } from 'vue-i18n';
-import http from '../api/http';
+import { useNotificationStore } from '../store/notification';
 
 const userStore = useUserStore();
+const notificationStore = useNotificationStore();
 const router = useRouter();
 const { t } = useI18n();
 
 // 从store获取用户信息和登录状态
 const userInfo = computed(() => userStore.userInfo);
 const isLogin = computed(() => userStore.getLoginStatus);
-const userBio = computed(() => userStore.getUserBio || t('profile.bio'));
+const userBio = computed(() => userStore.userInfo?.bio || t('profile.noBio'));
 
 const defaultAvatar = 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg';
 // 头像以「个人信息」里设置的为准，没设置才回落到默认图。
 // 之前这里写死了 cat.jpeg，所以在个人信息页换了头像，这一页也不变。
 const avatarUrl = computed(() => userInfo.value?.avatar || defaultAvatar);
-
-// 未读通知数，显示在「消息通知」右侧
-const unreadCount = ref(0);
-
-const loadUnread = async () => {
-  if (!isLogin.value) {
-    unreadCount.value = 0;
-    return;
-  }
-  try {
-    const res = await http.get('/api/notification/unread-count');
-    unreadCount.value = res.data?.data?.count || 0;
-  } catch (error) {
-    // 未读数失败不影响页面
-  }
-};
 
 const goToNotifications = () => {
   if (!isLogin.value) {
@@ -203,7 +201,7 @@ const loadUserInfo = async () => {
 const activatedBefore = ref(false);
 onMounted(() => {
   loadUserInfo();
-  loadUnread();
+  notificationStore.refreshUnread();
 });
 onActivated(() => {
   if (!activatedBefore.value) {
@@ -211,7 +209,7 @@ onActivated(() => {
     return;
   }
   loadUserInfo();
-  loadUnread();
+  notificationStore.refreshUnread();
 });
 </script>
 
@@ -276,5 +274,20 @@ onActivated(() => {
   overflow: hidden;
   border-radius: 12px;
   background-color: var(--surface-color);
+}
+
+.unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background-color: var(--danger-color);
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
 }
 </style>

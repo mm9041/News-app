@@ -1,11 +1,11 @@
 <template>
   <div class="favorite-container">
     <van-nav-bar
-      title="我的收藏"
-      left-text="返回"
+      :title="$t('favorite.title')"
+      :left-text="$t('common.back')"
       left-arrow
       @click-left="onClickLeft"
-      right-text="清空"
+      :right-text="$t('common.clear')"
       @click-right="onClickClear"
       fixed
     />
@@ -31,7 +31,7 @@
                 <div class="news-meta">
                   <span>{{ item.author }}</span>
                   <span>{{ item.publishTime }}</span>
-                  <span>收藏时间: {{ item.favoriteTime }}</span>
+                  <span>{{ $t('favorite.favoriteTime', { time: item.favoriteTime }) }}</span>
                 </div>
               </div>
             </div>
@@ -42,25 +42,27 @@
           type="danger"
           size="mini"
           icon="cross"
-          aria-label="删除收藏"
+          :aria-label="$t('favorite.deleteAria')"
           @click="confirmDelete(item.id)"
         ></van-button>
       </div>
     </div>
     
-    <van-empty v-else description="暂无收藏内容" />
+    <van-empty v-else :description="$t('favorite.empty')" />
   </div>
 </template>
 
 <script setup>
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useFavoriteStore } from '../store/modules/favorite';
 import { onImageError } from '../config/image';
 import { showDialog } from 'vant';
 
 const router = useRouter();
 const favoriteStore = useFavoriteStore();
+const { t } = useI18n();
 
 // 返回上一页
 const onClickLeft = () => {
@@ -84,8 +86,8 @@ const removeFavorite = async (id) => {
 // 确认删除
 const confirmDelete = (id) => {
   showDialog({
-    title: '提示',
-    message: '确定要删除这条收藏吗？',
+    title: t('common.prompt'),
+    message: t('favorite.deleteConfirm'),
     showCancelButton: true,
   }).then((action) => {
     if (action === 'confirm') {
@@ -97,8 +99,8 @@ const confirmDelete = (id) => {
 // 清空收藏
 const onClickClear = async () => {
   showDialog({
-    title: '提示',
-    message: '确定要清空所有收藏吗？',
+    title: t('common.prompt'),
+    message: t('favorite.clearConfirm'),
     showCancelButton: true,
   }).then(async (action) => {
     if (action === 'confirm') {

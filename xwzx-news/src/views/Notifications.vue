@@ -1,8 +1,8 @@
 <template>
   <div class="notice-page">
-    <van-nav-bar title="消息通知" left-arrow fixed @click-left="goBack">
+    <van-nav-bar :title="$t('notifications.title')" left-arrow fixed @click-left="goBack">
       <template #right>
-        <span v-if="unread > 0" class="nav-action" @click="markAllRead">全部已读</span>
+        <span v-if="unread > 0" class="nav-action" @click="markAllRead">{{ $t('notifications.markAllRead') }}</span>
       </template>
     </van-nav-bar>
 
@@ -27,15 +27,15 @@
             <span class="action">{{ actionText(item.type) }}</span>
           </div>
           <div class="notice-news">{{ item.newsTitle }}</div>
-          <div v-if="item.commentPreview" class="notice-comment">「{{ item.commentPreview }}」</div>
+          <div v-if="item.commentPreview" class="notice-comment">“{{ item.commentPreview }}”</div>
           <div class="notice-time">{{ formatTime(item.createdAt) }}</div>
         </div>
         <span v-if="!item.isRead" class="dot"></span>
       </div>
 
-      <div v-if="hasMore" class="load-more" @click="load()">加载更多</div>
+      <div v-if="hasMore" class="load-more" @click="load()">{{ $t('common.loadMore') }}</div>
       <div v-else-if="loaded && !list.length" class="empty">
-        <van-empty description="还没有收到通知" />
+        <van-empty :description="$t('notifications.empty')" />
       </div>
     </div>
 
@@ -44,21 +44,25 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 
 import http from '../api/http'
 import TabBar from '../components/TabBar.vue'
+import { useNotificationStore } from '../store/notification'
 
 const router = useRouter()
+const { t } = useI18n()
+const notificationStore = useNotificationStore()
 
 const PAGE_SIZE = 10
 const defaultAvatar = 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg'
 
 const list = ref([])
 const page = ref(1)
-const unread = ref(0)
+const unread = computed(() => notificationStore.unreadCount)
 const loading = ref(false)
 const hasMore = ref(false)
 const loaded = ref(false)
@@ -71,9 +75,9 @@ const goBack = () => router.back()
 const formatTime = value => (value ? String(value).replace('T', ' ').slice(0, 16) : '')
 
 const actionText = type => {
-  if (type === 'comment') return '评论了你的新闻'
-  if (type === 'like') return '赞了你的新闻'
-  return '与你互动'
+  if (type === 'comment') return t('notifications.actorCommented')
+  if (type === 'like') return t('notifications.actorLiked')
+  return t('notifications.actorInteracted')
 }
 
 const load = async (reset = false) => {
@@ -95,7 +99,7 @@ const load = async (reset = false) => {
     const data = res.data?.data || {}
 
     list.value = page.value === 1 ? data.list || [] : [...list.value, ...(data.list || [])]
-    unread.value = data.unread || 0
+    notificationStore.setUnreadCount(data.unread)
     hasMore.value = Boolean(data.hasMore)
     page.value += 1
   } catch (error) {
@@ -112,7 +116,7 @@ const openItem = async item => {
     try {
       await http.patch(`/api/notification/${item.id}`, { isRead: true })
       item.isRead = true
-      unread.value = Math.max(0, unread.value - 1)
+      notificationStore.decrementUnread()
     } catch (error) {
       // 标记失败不影响跳转
     }
@@ -124,8 +128,8 @@ const markAllRead = async () => {
   try {
     await http.patch('/api/notification', { isRead: true })
     list.value = list.value.map(item => ({ ...item, isRead: true }))
-    unread.value = 0
-    showToast('已全部标记为已读')
+    notificationStore.setUnreadCount(0)
+    showToast(t('notifications.markedAllRead'))
   } catch (error) {
     // 拦截器已提示
   }

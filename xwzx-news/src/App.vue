@@ -9,8 +9,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useNotificationStore } from './store/notification'
+import { useUserStore } from './store/user'
 
 // 只缓存 meta.keepAlive 的页面，其余页面每次进入都重建（数据才不会是旧的）。
 //
@@ -28,6 +30,39 @@ const keepAliveNames = computed(() =>
     .filter((route) => route.meta?.keepAlive && route.name)
     .map((route) => route.name)
 )
+
+// 登录/恢复会话后立即同步未读通知；退出时立刻清掉红色数字。
+// 没有 WebSocket，因此登录期间每 60 秒轻量刷新一次，页面切换时也会补拉。
+const userStore = useUserStore()
+const notificationStore = useNotificationStore()
+let unreadTimer = null
+watch(
+  () => userStore.isLogin,
+  loggedIn => {
+    if (unreadTimer) {
+      clearInterval(unreadTimer)
+      unreadTimer = null
+    }
+    if (loggedIn) {
+      notificationStore.refreshUnread(true)
+      unreadTimer = setInterval(() => notificationStore.refreshUnread(true), 60_000)
+    } else {
+      notificationStore.clear()
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => router.currentRoute.value.path,
+  () => {
+    if (userStore.isLogin) notificationStore.refreshUnread()
+  }
+)
+
+onBeforeUnmount(() => {
+  if (unreadTimer) clearInterval(unreadTimer)
+})
 </script>
 
 <style>

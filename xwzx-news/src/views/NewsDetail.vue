@@ -1,8 +1,8 @@
 <template>
   <div class="news-detail">
     <van-nav-bar
-      title="新闻详情"
-      left-text="返回"
+      :title="$t('detail.title')"
+      :left-text="$t('detail.back')"
       left-arrow
       @click-left="onClickLeft"
       fixed
@@ -16,7 +16,7 @@
             type="button"
             class="like-btn"
             :class="{ 'is-liked': liked }"
-            :aria-label="liked ? '取消点赞' : '点赞'"
+            :aria-label="liked ? $t('detail.unlike') : $t('detail.like')"
             @click="toggleLike"
           >
             <van-icon :name="liked ? 'good-job' : 'good-job-o'" size="20" />
@@ -29,12 +29,13 @@
             :class="{ 'is-following': isFollowing }"
             @click="toggleFollow"
           >
-            {{ isFollowing ? '已关注' : '关注作者' }}
+            {{ isFollowing ? $t('detail.following') : $t('detail.followAuthor') }}
           </button>
           <van-button
             class="favorite-btn"
             :icon="isFavorite ? 'star' : 'star-o'"
             :class="{ 'is-favorite': isFavorite }"
+            :aria-label="$t('favorite.title')"
             @click="toggleFavorite"
           />
         </div>
@@ -43,7 +44,7 @@
       <div class="info">
         <span>{{ newsStore.newsDetail.author }}</span>
         <span>{{ newsStore.newsDetail.publishTime }}</span>
-        <span>{{ newsStore.newsDetail.views }} 阅读</span>
+        <span>{{ $t('common.views', { count: newsStore.newsDetail.views }) }}</span>
       </div>
 
       <div class="cover" v-if="newsStore.newsDetail.image">
@@ -77,7 +78,7 @@
       </div>
 
       <div class="related-news" v-if="newsStore.newsDetail.relatedNews?.length">
-        <h3>相关推荐</h3>
+        <h3>{{ $t('detail.related') }}</h3>
         <div class="related-list">
           <div 
             class="related-item" 
@@ -104,15 +105,15 @@
       <!-- 评论区 -->
       <div class="comment-section">
         <div class="comment-header">
-          评论
+          {{ $t('detail.comments') }}
           <span class="comment-count" v-if="commentTotal">{{ commentTotal }}</span>
         </div>
 
         <div class="comment-editor">
           <div class="editor-main">
             <div v-if="replyTarget" class="reply-hint">
-              回复 @{{ replyTarget.name }}
-              <span class="reply-cancel" @click="cancelReply">取消</span>
+              {{ $t('detail.replyingTo', { name: replyTarget.name }) }}
+              <span class="reply-cancel" @click="cancelReply">{{ $t('detail.cancel') }}</span>
             </div>
             <van-field
               v-model="commentText"
@@ -121,7 +122,7 @@
               type="textarea"
               maxlength="500"
               show-word-limit
-              :placeholder="replyTarget ? `回复 @${replyTarget.name}` : '说点什么...'"
+              :placeholder="replyTarget ? $t('detail.replyPlaceholder', { name: replyTarget.name }) : $t('detail.commentPlaceholder')"
               class="comment-field"
             />
           </div>
@@ -132,7 +133,7 @@
             :disabled="!commentText.trim()"
             @click="submitComment"
           >
-            发布
+            {{ $t('detail.publish') }}
           </van-button>
         </div>
 
@@ -150,8 +151,8 @@
                 <span class="comment-name">{{ item.user.nickname || item.user.username }}</span>
                 <span class="comment-time">{{ formatTime(item.createdAt) }}</span>
                 <span class="comment-actions">
-                  <span class="comment-reply" @click="startReply(item.id, item.user.nickname || item.user.username)">回复</span>
-                  <span v-if="item.canDelete" class="comment-delete" @click="deleteComment(item)">删除</span>
+                  <span class="comment-reply" @click="startReply(item.id, item.user.nickname || item.user.username)">{{ $t('detail.reply') }}</span>
+                  <span v-if="item.canDelete" class="comment-delete" @click="deleteComment(item)">{{ $t('detail.delete') }}</span>
                 </span>
               </div>
               <div class="comment-text">{{ item.content }}</div>
@@ -168,11 +169,11 @@
                   <div class="reply-body">
                     <div class="comment-meta">
                       <span class="comment-name">{{ reply.user.nickname || reply.user.username }}</span>
-                      <span v-if="reply.replyTo" class="reply-to">回复 @{{ reply.replyTo }}</span>
+                      <span v-if="reply.replyTo" class="reply-to">{{ $t('detail.replyingTo', { name: reply.replyTo }) }}</span>
                       <span class="comment-time">{{ formatTime(reply.createdAt) }}</span>
                       <span class="comment-actions">
-                        <span class="comment-reply" @click="startReply(reply.id, reply.user.nickname || reply.user.username)">回复</span>
-                        <span v-if="reply.canDelete" class="comment-delete" @click="deleteComment(reply)">删除</span>
+                        <span class="comment-reply" @click="startReply(reply.id, reply.user.nickname || reply.user.username)">{{ $t('detail.reply') }}</span>
+                        <span v-if="reply.canDelete" class="comment-delete" @click="deleteComment(reply)">{{ $t('detail.delete') }}</span>
                       </span>
                     </div>
                     <div class="comment-text">{{ reply.content }}</div>
@@ -182,21 +183,22 @@
             </div>
           </div>
 
-          <div v-if="commentHasMore" class="comment-more" @click="loadComments()">加载更多评论</div>
-          <div v-else class="comment-more comment-end">没有更多了</div>
+          <div v-if="commentHasMore" class="comment-more" @click="loadComments()">{{ $t('detail.loadMoreComments') }}</div>
+          <div v-else class="comment-more comment-end">{{ $t('detail.noMoreComments') }}</div>
         </div>
 
-        <van-empty v-else-if="commentLoaded" description="还没有评论，来说第一句吧" image-size="60" />
+        <van-empty v-else-if="commentLoaded" :description="$t('detail.commentEmpty')" image-size="60" />
       </div>
     </div>
     
-    <van-empty v-else description="加载中..." />
+    <van-empty v-else :description="$t('detail.loadingComments')" />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref,watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useNewsStore } from '../store/modules/news'
 import { useHistoryStore } from '../store/modules/history'
 import { useFavoriteStore } from '../store/modules/favorite'
@@ -207,6 +209,7 @@ import http from '../api/http'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const newsStore = useNewsStore()
 const historyStore = useHistoryStore()
 const favoriteStore = useFavoriteStore()
@@ -245,7 +248,7 @@ const toggleFavorite = async () => {
   if (!userStore.getLoginStatus) {
     // 未登录则跳转到登录页
     showToast({
-      message: '请先登录后再收藏',
+      message: t('detail.loginToFavorite'),
       position: 'bottom',
     })
     router.push('/login')
@@ -257,18 +260,18 @@ const toggleFavorite = async () => {
   
   if (status === true) {
     showToast({
-      message: '已添加到收藏',
+      message: t('detail.favoriteAdded'),
       position: 'bottom',
     })
   } else if (status === false) {
     showToast({
-      message: '已取消收藏',
+      message: t('detail.favoriteRemoved'),
       position: 'bottom',
     })
   } else {
     // status为null表示操作失败
     showToast({
-      message: '操作失败，请稍后重试',
+      message: t('common.operationFailed'),
       position: 'bottom',
     })
   }
@@ -336,7 +339,7 @@ const likeLoading = ref(false)
 
 const toggleLike = async () => {
   if (!userStore.getLoginStatus) {
-    showToast('请先登录后再点赞')
+    showToast(t('detail.loginToLike'))
     router.push('/login')
     return
   }
@@ -367,7 +370,7 @@ const followLoading = ref(false)
 // 关注对象：作者（就是页面上显示的那个名字——可能是「海南日报」，也可能是人名）
 const followTarget = computed(() => {
   const author = newsStore.newsDetail.author
-  return author ? { name: author, label: '作者' } : null
+  return author ? { name: author, label: t('author.fallback') } : null
 })
 
 const toggleFollow = async () => {
@@ -375,7 +378,7 @@ const toggleFollow = async () => {
   if (!target) return
 
   if (!userStore.getLoginStatus) {
-    showToast('请先登录')
+    showToast(t('common.loginRequired'))
     router.push('/login')
     return
   }
@@ -388,13 +391,13 @@ const toggleFollow = async () => {
         params: { name: target.name }
       })
       isFollowing.value = false
-      showToast('已取消关注')
+      showToast(t('detail.unfollowed'))
     } else {
       await http.post('/api/follow', null, {
         params: { name: target.name }
       })
       isFollowing.value = true
-      showToast('已关注作者')
+      showToast(t('detail.followed'))
     }
   } catch (error) {
     // 拦截器已提示
@@ -475,7 +478,7 @@ const submitComment = async () => {
   if (!content) return
 
   if (!userStore.getLoginStatus) {
-    showToast('请先登录后再评论')
+    showToast(t('detail.loginToComment'))
     router.push('/login')
     return
   }
@@ -490,7 +493,7 @@ const submitComment = async () => {
     await http.post('/api/comment', payload)
     commentText.value = ''
     replyTarget.value = null
-    showToast('评论成功')
+    showToast(t('detail.commentSuccess'))
     await loadComments(true)
   } catch (error) {
     // 拦截器已提示
@@ -501,7 +504,7 @@ const submitComment = async () => {
 
 const deleteComment = async item => {
   try {
-    await showConfirmDialog({ title: '删除评论', message: '确定删除这条评论？' })
+    await showConfirmDialog({ title: t('detail.deleteCommentTitle'), message: t('detail.deleteCommentMessage') })
   } catch (error) {
     return
   }
@@ -509,9 +512,21 @@ const deleteComment = async item => {
   try {
     await http.delete(`/api/comment/${item.id}`)
     // 本地移除即可，不必整页重刷
-    comments.value = comments.value.filter(comment => comment.id !== item.id)
-    commentTotal.value = Math.max(0, commentTotal.value - 1)
-    showToast('已删除')
+    const isReply = Boolean(item.parentId)
+    // 删一级评论会级联删掉它的全部回复，计数要一起减，否则总数会虚高
+    const removedCount = isReply ? 1 : 1 + (item.replies?.length || 0)
+
+    if (isReply) {
+      const parent = comments.value.find(comment => comment.id === item.parentId)
+      if (parent) {
+        parent.replies = (parent.replies || []).filter(reply => reply.id !== item.id)
+      }
+    } else {
+      comments.value = comments.value.filter(comment => comment.id !== item.id)
+    }
+
+    commentTotal.value = Math.max(0, commentTotal.value - removedCount)
+    showToast(t('detail.deleted'))
   } catch (error) {
     // 拦截器已提示
   }
@@ -571,6 +586,7 @@ watch(newsId, (newId, oldId) => {
   height: 44px;
   padding: 0;
   border-radius: 50%;
+  color: var(--icon-color-muted);
 }
 
 .favorite-btn.is-favorite {
@@ -673,7 +689,7 @@ watch(newsId, (newId, oldId) => {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--text-color-light);
+  color: var(--icon-color-muted);
   cursor: pointer;
   transition: color 0.2s;
 }

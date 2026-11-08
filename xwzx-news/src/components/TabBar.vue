@@ -2,15 +2,21 @@
   <van-tabbar v-model="active" route>
     <van-tabbar-item to="/home" icon="home-o">{{ $t('nav.home') }}</van-tabbar-item>
     <van-tabbar-item to="/aichat" icon="chat-o">{{ $t('nav.aiChat') }}</van-tabbar-item>
-    <van-tabbar-item to="/my" icon="user-o">{{ $t('nav.my') }}</van-tabbar-item>
+    <van-tabbar-item
+      to="/my"
+      icon="user-o"
+      :badge="notificationStore.badgeText"
+    >{{ $t('nav.my') }}</van-tabbar-item>
   </van-tabbar>
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useNotificationStore } from '../store/notification'
 
 const route = useRoute()
+const notificationStore = useNotificationStore()
 const active = ref(0)
 
 // 根据当前路由路径设置激活的标签

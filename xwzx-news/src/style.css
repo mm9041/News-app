@@ -12,6 +12,8 @@
   --background-color: #f7f8fa;
   --surface-color: #fff;
   --surface-muted: #f2f3f5;
+  --icon-color: #323233;
+  --icon-color-muted: #969799;
   --danger-color: #ee0a24;
   --white: #fff;
   --content-max-width: 750px;
@@ -21,6 +23,8 @@
 
   /* Vant 主题桥接 */
   --van-primary-color: var(--primary-color);
+  --van-danger-color: var(--danger-color);
+  --van-badge-background: var(--danger-color);
   --van-text-color: var(--text-color);
   --van-text-color-2: var(--text-color-light);
   --van-text-color-3: var(--text-color-lighter);
@@ -28,10 +32,21 @@
   --van-background: var(--surface-color);
   --van-background-2: var(--background-color);
   --van-nav-bar-background: var(--surface-color);
-  --van-nav-bar-text-color: var(--text-color);
+  --van-nav-bar-icon-color: var(--icon-color);
+  --van-nav-bar-text-color: var(--icon-color);
+  --van-nav-bar-title-text-color: var(--text-color);
+  --van-cell-right-icon-color: var(--icon-color-muted);
+  --van-search-left-icon-color: var(--icon-color-muted);
+  --van-field-clear-icon-color: var(--icon-color-muted);
+  --van-field-right-icon-color: var(--icon-color-muted);
+  --van-radio-checked-icon-color: var(--primary-color);
+  --van-checkbox-checked-icon-color: var(--primary-color);
+  --van-popup-close-icon-color: var(--icon-color-muted);
+  --van-image-error-icon-color: var(--icon-color-muted);
   --van-tabbar-background: var(--surface-color);
-  --van-tabbar-item-text-color: var(--text-color-lighter);
+  --van-tabbar-item-text-color: var(--icon-color-muted);
   --van-tabbar-item-active-color: var(--primary-color);
+  --van-tabbar-item-active-background: var(--surface-color);
   --van-tabs-bottom-bar-color: var(--primary-color);
 
   color-scheme: light;

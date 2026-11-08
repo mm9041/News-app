@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { i18n } from '../i18n'
 
 const routes = [
   {
@@ -197,11 +198,34 @@ const router = createRouter({
   }
 })
 
+const ROUTE_TITLE_KEYS = {
+  Login: 'auth.loginTitle',
+  Register: 'auth.registerTitle',
+  Home: 'home.title',
+  NewsDetail: 'detail.title',
+  History: 'history.title',
+  Favorite: 'favorite.title',
+  Category: 'common.allCategories',
+  TagNews: 'tag.fallback',
+  FollowFeed: 'follow.title',
+  AuthorNews: 'author.fallback',
+  Search: 'search.title',
+  AdminNews: 'admin.news.title',
+  AdminDashboard: 'admin.dashboard.title',
+  AdminUsers: 'admin.users.title',
+  Notifications: 'notifications.title',
+  AIChat: 'aiChat.title',
+  My: 'my.title',
+  Profile: 'profile.title',
+  Settings: 'settings.title'
+}
+
 // 只负责设置页面标题。
 // 登录 / 管理员拦截在 router/guard.js 里（那里能 import store，
 // 不会形成 router -> store -> api/http -> router 的循环依赖）。
 router.beforeEach((to) => {
-  document.title = to.meta.title || '新闻资讯'
+  const key = ROUTE_TITLE_KEYS[to.name]
+  document.title = key ? i18n.global.t(key) : i18n.global.t('home.title')
 })
 
 export default router

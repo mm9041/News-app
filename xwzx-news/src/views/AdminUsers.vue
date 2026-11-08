@@ -1,9 +1,9 @@
 <template>
   <div class="users-page">
-    <van-nav-bar title="用户管理" left-arrow fixed @click-left="goBack" />
+    <van-nav-bar :title="$t('admin.users.title')" left-arrow fixed @click-left="goBack" />
 
     <div class="toolbar">
-      <van-search v-model="keyword" placeholder="搜索用户名或昵称" shape="round" @search="reload" @clear="reload" />
+      <van-search v-model="keyword" :placeholder="$t('admin.users.searchPlaceholder')" shape="round" @search="reload" @clear="reload" />
     </div>
 
     <div class="list-area">
@@ -12,26 +12,26 @@
         <div class="user-info">
           <div class="user-name">
             {{ user.nickname || user.username }}
-            <span v-if="user.isAdmin" class="badge badge-admin">管理员</span>
-            <span v-if="user.banned" class="badge badge-banned">已禁用</span>
+            <span v-if="user.isAdmin" class="badge badge-admin">{{ $t('admin.users.admin') }}</span>
+            <span v-if="user.banned" class="badge badge-banned">{{ $t('admin.users.banned') }}</span>
           </div>
           <div class="user-meta">
-            @{{ user.username }} · {{ user.commentCount }} 条评论 · {{ formatTime(user.createdAt) }}
+            {{ $t('admin.users.meta', { username: user.username, count: user.commentCount, time: formatTime(user.createdAt) }) }}
           </div>
         </div>
         <div class="user-actions">
           <van-button size="mini" plain :type="user.banned ? 'primary' : 'danger'" @click="toggleBan(user)">
-            {{ user.banned ? '解禁' : '禁用' }}
+            {{ user.banned ? $t('admin.users.unban') : $t('admin.users.ban') }}
           </van-button>
           <van-button size="mini" plain type="warning" @click="toggleAdmin(user)">
-            {{ user.isAdmin ? '取消管理' : '设为管理' }}
+            {{ user.isAdmin ? $t('admin.users.revokeAdmin') : $t('admin.users.makeAdmin') }}
           </van-button>
-          <van-button size="mini" plain type="danger" @click="removeUser(user)">删除</van-button>
+          <van-button size="mini" plain type="danger" @click="removeUser(user)">{{ $t('admin.users.delete') }}</van-button>
         </div>
       </div>
 
-      <div v-if="hasMore" class="load-more" @click="load()">加载更多</div>
-      <van-empty v-if="loaded && !list.length" description="没有匹配的用户" />
+      <div v-if="hasMore" class="load-more" @click="load()">{{ $t('admin.users.loadMore') }}</div>
+      <van-empty v-if="loaded && !list.length" :description="$t('admin.users.empty')" />
     </div>
   </div>
 </template>
@@ -40,12 +40,14 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 
 import http from '../api/http'
 import { useUserStore } from '../store/user'
 
 const router = useRouter()
 const userStore = useUserStore()
+const { t } = useI18n()
 const defaultAvatar = 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg'
 
 const PAGE_SIZE = 20
@@ -100,8 +102,8 @@ const toggleBan = async user => {
   const banning = !user.banned
   try {
     await showConfirmDialog({
-      title: banning ? '禁用账号' : '解禁账号',
-      message: banning ? '禁用后该用户将无法登录和发言，确定？' : '恢复该用户的访问权限？'
+      title: banning ? t('admin.users.banTitle') : t('admin.users.unbanTitle'),
+      message: banning ? t('admin.users.banMessage') : t('admin.users.unbanMessage')
     })
   } catch (error) {
     return
@@ -110,7 +112,7 @@ const toggleBan = async user => {
   try {
     await http.patch(`/api/admin/users/${user.id}`, { banned: banning })
     user.banned = banning
-    showToast(banning ? '已禁用' : '已解禁')
+    showToast(banning ? t('admin.users.bannedToast') : t('admin.users.unbannedToast'))
   } catch (error) {
     // 拦截器已提示
   }
@@ -120,8 +122,8 @@ const toggleAdmin = async user => {
   const granting = !user.isAdmin
   try {
     await showConfirmDialog({
-      title: granting ? '授予管理员' : '取消管理员',
-      message: granting ? '该用户将可以管理新闻和用户' : '该用户将失去管理后台权限'
+      title: granting ? t('admin.users.grantTitle') : t('admin.users.revokeTitle'),
+      message: granting ? t('admin.users.grantMessage') : t('admin.users.revokeMessage')
     })
   } catch (error) {
     return
@@ -130,7 +132,7 @@ const toggleAdmin = async user => {
   try {
     await http.patch(`/api/admin/users/${user.id}`, { isAdmin: granting })
     user.isAdmin = granting
-    showToast('已更新')
+    showToast(t('admin.users.updated'))
   } catch (error) {
     // 拦截器已提示
   }
@@ -139,8 +141,8 @@ const toggleAdmin = async user => {
 const removeUser = async user => {
   try {
     await showConfirmDialog({
-      title: '删除用户',
-      message: `将删除 @${user.username} 及其全部评论/点赞/收藏，不可恢复！`
+      title: t('admin.users.deleteTitle'),
+      message: t('admin.users.deleteMessage', { username: user.username })
     })
   } catch (error) {
     return
@@ -149,7 +151,7 @@ const removeUser = async user => {
   try {
     await http.delete(`/api/admin/users/${user.id}`)
     list.value = list.value.filter(item => item.id !== user.id)
-    showToast('已删除')
+    showToast(t('admin.users.deleted'))
   } catch (error) {
     // 拦截器已提示
   }

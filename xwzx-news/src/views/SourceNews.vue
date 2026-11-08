@@ -8,7 +8,7 @@
           :class="{ 'is-following': isFollowing }"
           @click="toggleFollow"
         >
-          {{ isFollowing ? '已关注' : '+ 关注' }}
+          {{ isFollowing ? $t('author.following') : $t('author.follow') }}
         </span>
       </template>
     </van-nav-bar>
@@ -16,11 +16,11 @@
     <div class="list-area">
       <news-item v-for="item in list" :key="item.id" :news="item" />
 
-      <div v-if="hasMore" class="load-more" @click="load()">加载更多</div>
+      <div v-if="hasMore" class="load-more" @click="load()">{{ $t('common.loadMore') }}</div>
       <div v-else-if="loaded && !list.length" class="empty">
-        <van-empty description="该报纸下还没有新闻" />
+        <van-empty :description="$t('source.empty')" />
       </div>
-      <div v-else-if="loaded" class="load-more load-end">没有更多了</div>
+      <div v-else-if="loaded" class="load-more load-end">{{ $t('common.noMore') }}</div>
     </div>
 
     <tab-bar />
@@ -31,6 +31,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 
 import http from '../api/http'
 import NewsItem from '../components/NewsItem.vue'
@@ -40,6 +41,7 @@ import { useUserStore } from '../store/user'
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const { t } = useI18n()
 
 const PAGE_SIZE = 10
 
@@ -54,7 +56,7 @@ const loaded = ref(false)
 let fetching = false
 let followLoading = false
 
-const title = computed(() => (sourceName.value ? sourceName.value : '报纸'))
+const title = computed(() => (sourceName.value ? sourceName.value : t('source.fallback')))
 
 const goBack = () => router.back()
 
@@ -103,7 +105,7 @@ const loadFollowState = async () => {
 
 const toggleFollow = async () => {
   if (!userStore.getLoginStatus) {
-    showToast('请先登录')
+    showToast(t('common.loginRequired'))
     router.push('/login')
     return
   }
@@ -116,14 +118,14 @@ const toggleFollow = async () => {
         data: { targetType: 'source', targetId: sourceId.value }
       })
       isFollowing.value = false
-      showToast('已取消关注')
+      showToast(t('source.unfollowed'))
     } else {
       await http.post('/api/follow', {
         targetType: 'source',
         targetId: sourceId.value
       })
       isFollowing.value = true
-      showToast('已关注报纸')
+      showToast(t('source.followed'))
     }
   } catch (error) {
     // 拦截器已提示

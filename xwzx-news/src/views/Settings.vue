@@ -36,8 +36,18 @@
           :class="{ active: currentTheme === theme.id }"
           @click="changeTheme(theme.id)"
         >
-          <div class="theme-color" :style="{ backgroundColor: theme.primaryColor }"></div>
-          <div class="theme-name">{{ theme.name }}</div>
+          <div
+            class="theme-color"
+            :style="{ backgroundColor: theme.previewColor, borderColor: theme.previewBorder }"
+          >
+            <van-icon
+              v-if="currentTheme === theme.id"
+              name="success"
+              class="theme-check"
+              :style="{ color: theme.previewForeground }"
+            />
+          </div>
+          <div class="theme-name">{{ $t(`themes.${theme.id}`) }}</div>
         </div>
       </div>
     </van-popup>
@@ -106,10 +116,10 @@ const changeTheme = (themeId) => {
 // 语言相关
 const showLanguagePopup = ref(false);
 const currentLanguage = ref(languageStore.getCurrentLanguage);
-const languageOptions = [
-  { label: '简体中文', value: 'zh-CN' },
-  { label: 'English', value: 'en-US' }
-];
+const languageOptions = computed(() => [
+  { label: t('settings.languages.zh'), value: 'zh-CN' },
+  { label: t('settings.languages.en'), value: 'en-US' }
+]);
 
 // 切换语言
 const changeLanguage = () => {
@@ -147,7 +157,7 @@ const changeLanguage = () => {
   padding: 16px;
   font-size: 16px;
   font-weight: bold;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .theme-list {
@@ -166,16 +176,22 @@ const changeLanguage = () => {
 }
 
 .theme-color {
+  display: grid;
   width: 40px;
   height: 40px;
-  border-radius: 50%;
+  place-items: center;
   margin-bottom: 8px;
   border: 2px solid transparent;
+  border-radius: 50%;
+  transition: box-shadow 0.2s;
+}
+
+.theme-check {
+  font-size: 18px;
 }
 
 .theme-item.active .theme-color {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 18%, transparent);
+  box-shadow: 0 0 0 2px var(--surface-color), 0 0 0 4px var(--primary-color);
 }
 
 .theme-name {

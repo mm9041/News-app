@@ -1,11 +1,11 @@
 <template>
   <div class="search-page">
-    <van-nav-bar title="搜索" left-arrow fixed @click-left="goBack" />
+    <van-nav-bar :title="$t('search.title')" left-arrow fixed @click-left="goBack" />
 
     <div class="search-bar">
       <van-search
         v-model="keyword"
-        placeholder="搜索标题或正文"
+        :placeholder="$t('search.placeholder')"
         shape="round"
         show-action
         @search="onSearch"
@@ -14,7 +14,7 @@
         @input="onInput"
       >
         <template #action>
-          <button type="button" class="search-action" @click="onSearch">搜索</button>
+          <button type="button" class="search-action" @click="onSearch">{{ $t('search.action') }}</button>
         </template>
       </van-search>
 
@@ -45,8 +45,8 @@
         </div>
         <div v-if="history.length">
           <div class="suggest-section">
-            最近搜索
-            <button type="button" class="suggest-clear" @click="clearHistory">清空</button>
+            {{ $t('search.recent') }}
+            <button type="button" class="suggest-clear" @click="clearHistory">{{ $t('common.clear') }}</button>
           </div>
           <button
             v-for="word in history"
@@ -64,7 +64,7 @@
 
     <div class="result-area">
       <div v-if="searched && total > 0" class="result-meta" role="status" aria-live="polite">
-        找到 {{ total }} 条相关新闻
+        {{ $t('search.resultCount', { count: total }) }}
       </div>
 
       <van-list
@@ -72,7 +72,7 @@
         v-model:loading="loading"
         :finished="finished"
         :immediate-check="false"
-        finished-text="没有更多了"
+        :finished-text="$t('common.noMore')"
         @load="loadMore"
       >
         <news-item
@@ -85,14 +85,14 @@
 
       <div v-if="searched && loadError" class="result-error" role="alert">
         <span>{{ loadError }}</span>
-        <van-button size="small" type="primary" plain @click="retrySearch">重试</van-button>
+        <van-button size="small" type="primary" plain @click="retrySearch">{{ $t('common.retry') }}</van-button>
       </div>
 
       <van-empty
         v-if="searched && !loading && !loadError && !list.length"
-        description="没有找到相关新闻"
+        :description="$t('search.empty')"
       />
-      <van-empty v-if="!searched" description="输入关键词，搜索标题和正文" />
+      <van-empty v-if="!searched" :description="$t('search.hint')" />
     </div>
   </div>
 </template>
@@ -101,12 +101,14 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 
 import http from '../api/http'
 import NewsItem from '../components/NewsItem.vue'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 const PAGE_SIZE = 10
 const HISTORY_KEY = 'search_history'
@@ -199,7 +201,7 @@ const useHistory = word => {
 const fetchPage = async (reset = false) => {
   const kw = keyword.value.trim()
   if (!kw) {
-    showToast('请输入关键词')
+    showToast(t('search.keywordRequired'))
     return
   }
 
@@ -239,7 +241,7 @@ const fetchPage = async (reset = false) => {
     page.value = requestedPage + 1
   } catch (error) {
     if (requestId === searchRequestSeq) {
-      loadError.value = '搜索失败，请稍后重试'
+      loadError.value = t('search.failed')
       finished.value = false
     }
   } finally {

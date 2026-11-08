@@ -50,8 +50,9 @@ class CommentItemResponse(CommentReply):
 
 class CommentListResponse(BaseModel):
     list: list[CommentItemResponse]
-    total: int
-    has_more: bool = Field(alias="hasMore")
+    # 评论总数，含二级回复；分页单位是一级评论，所以 total ≠ 列表总条数 × 页数
+    total: int = Field(..., description="评论总数，包含回复")
+    has_more: bool = Field(alias="hasMore", description="是否还有更多一级评论")
 
     model_config = ConfigDict(populate_by_name=True)
 

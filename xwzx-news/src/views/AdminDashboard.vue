@@ -1,29 +1,29 @@
 <template>
   <div class="dash-page">
-    <van-nav-bar title="数据看板" left-arrow fixed @click-left="goBack" />
+    <van-nav-bar :title="$t('admin.dashboard.title')" left-arrow fixed @click-left="goBack" />
 
     <div class="content">
       <div class="cards">
         <div class="card">
           <div class="num">{{ data.overview.news }}</div>
-          <div class="label">新闻</div>
+          <div class="label">{{ $t('admin.dashboard.news') }}</div>
         </div>
         <div class="card">
           <div class="num">{{ data.overview.comments }}</div>
-          <div class="label">评论</div>
+          <div class="label">{{ $t('admin.dashboard.comments') }}</div>
         </div>
         <div class="card">
           <div class="num">{{ data.overview.users }}</div>
-          <div class="label">用户</div>
+          <div class="label">{{ $t('admin.dashboard.users') }}</div>
         </div>
         <div class="card">
           <div class="num">{{ data.overview.views }}</div>
-          <div class="label">总阅读</div>
+          <div class="label">{{ $t('admin.dashboard.totalViews') }}</div>
         </div>
       </div>
 
       <div class="panel">
-        <div class="panel-title">近 {{ days }} 天新增</div>
+        <div class="panel-title">{{ $t('admin.dashboard.newInDays', { days }) }}</div>
         <div class="chart">
           <div v-for="item in data.trend" :key="item.date" class="chart-col">
             <div class="bars">
@@ -34,15 +34,15 @@
           </div>
         </div>
         <div class="legend">
-          <span class="dot dot-news"></span><span class="legend-text">新闻</span>
-          <span class="dot dot-comment"></span><span class="legend-text">评论</span>
+          <span class="dot dot-news"></span><span class="legend-text">{{ $t('admin.dashboard.news') }}</span>
+          <span class="dot dot-comment"></span><span class="legend-text">{{ $t('admin.dashboard.comments') }}</span>
         </div>
       </div>
 
       <div class="panel">
-        <div class="panel-title">分类分布</div>
+        <div class="panel-title">{{ $t('admin.dashboard.categoryDistribution') }}</div>
         <div v-for="item in data.categories" :key="item.name" class="cat-row">
-          <span class="cat-name">{{ item.name }}</span>
+          <span class="cat-name">{{ categoryLabel(item.name, t) }}</span>
           <div class="cat-track">
             <div class="cat-fill" :style="{ width: catPercent(item.news) + '%' }"></div>
           </div>
@@ -51,7 +51,7 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title">阅读量 Top {{ data.topNews.length }}</div>
+        <div class="panel-title">{{ $t('admin.dashboard.topViews', { count: data.topNews.length }) }}</div>
         <div
           v-for="(item, index) in data.topNews"
           :key="item.id"
@@ -62,7 +62,7 @@
           <span class="top-title">{{ item.title }}</span>
           <span class="top-views">{{ item.views }}</span>
         </div>
-        <div v-if="!data.topNews.length" class="empty-text">暂无数据</div>
+        <div v-if="!data.topNews.length" class="empty-text">{{ $t('admin.dashboard.noData') }}</div>
       </div>
     </div>
   </div>
@@ -71,10 +71,13 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import http from '../api/http'
+import { categoryLabel } from '../i18n/categories'
 
 const router = useRouter()
+const { t } = useI18n()
 const days = 7
 
 const data = ref({

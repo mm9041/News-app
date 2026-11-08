@@ -1,5 +1,6 @@
 import { showToast } from 'vant'
 
+import { i18n } from '../i18n'
 import { useUserStore } from '../store/user'
 
 /**
@@ -19,12 +20,12 @@ export function setupGuard(router) {
     const userStore = useUserStore()
 
     if (!userStore.isLogin) {
-      showToast('请先登录')
+      showToast(i18n.global.t('common.loginRequired'))
       return { path: '/login', query: { redirect: to.fullPath } }
     }
 
     if (to.meta?.requiresAdmin && !userStore.userInfo?.isAdmin) {
-      showToast('需要管理员权限')
+      showToast(i18n.global.t('common.adminRequired'))
       return '/home'
     }
 

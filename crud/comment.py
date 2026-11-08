@@ -13,19 +13,27 @@ from models.users import User
 
 
 async def list_comments(db: AsyncSession, news_id: int, skip: int, limit: int):
-    """返回 (一级评论, {一级评论ID: [(回复, 作者, 被回复人昵称)]}, 一级评论总数)。
+    """返回 (一级评论, {一级评论ID: [(回复, 作者, 被回复人昵称)]}, 评论总数, 一级评论总数)。
 
     分页只针对一级评论；每条一级评论的回复一次性全部带出
     （单条新闻的评论量很小，不值得再为回复做一层分页）。
+
+    两个计数用途不同，别合并：
+    - total：页面展示的「评论 N」，包含回复 —— 回复也是评论，用户预期能算进去
+    - root_total：只数一级评论，用于 hasMore 判断 —— 分页单位是一级评论，
+      拿含回复的 total 去算会把「没有下一页」误判成「还有下一页」
     """
     total = (
+        await db.execute(select(func.count(NewsComment.id)).where(NewsComment.news_id == news_id))
+    ).scalar_one()
+    root_total = (
         await db.execute(
             select(func.count(NewsComment.id)).where(NewsComment.news_id == news_id, NewsComment.parent_id.is_(None))
         )
     ).scalar_one()
 
-    if not total:
-        return [], {}, 0
+    if not root_total:
+        return [], {}, total, 0
 
     roots_stmt = (
         select(NewsComment, User)
@@ -39,7 +47,7 @@ async def list_comments(db: AsyncSession, news_id: int, skip: int, limit: int):
     roots = [(row[0], row[1]) for row in (await db.execute(roots_stmt)).all()]
     root_ids = [comment.id for comment, _ in roots]
     if not root_ids:
-        return [], {}, total
+        return [], {}, total, root_total
 
     author = aliased(User)
     reply_to = aliased(User)
@@ -56,7 +64,7 @@ async def list_comments(db: AsyncSession, news_id: int, skip: int, limit: int):
     for comment, reply_author, rt_nickname, rt_username in (await db.execute(replies_stmt)).all():
         replies_map.setdefault(comment.parent_id, []).append((comment, reply_author, rt_nickname or rt_username))
 
-    return roots, replies_map, total
+    return roots, replies_map, total, root_total
 
 
 async def add_comment(

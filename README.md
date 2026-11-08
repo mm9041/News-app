@@ -131,7 +131,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8001
 | GET | `/api/news/recommend?limit` | 否 | 猜你喜欢；登录后按兴趣推荐，游客给热门 |
 | PUT | `/api/news/{news_id}/like` | 是 | 点赞（幂等） |
 | DELETE | `/api/news/{news_id}/like` | 是 | 取消点赞（幂等） |
-| GET | `/api/comment?newsId&page&pageSize` | 否 | 一级评论分页，每条带出回复 |
+| GET | `/api/comment?newsId&page&pageSize` | 否 | 一级评论分页，每条带出回复；`total` 为评论总数（含回复） |
 | POST | `/api/comment` | 是 | 发表评论 / 回复（传 `parentId`），返回 201 |
 | DELETE | `/api/comment/{comment_id}` | 是 | 删除评论（本人或管理员，级联删回复） |
 | GET | `/api/tag/hot?limit` | 否 | 标签墙（按引用次数） |

@@ -3,7 +3,7 @@
     class="news-item"
     role="link"
     tabindex="0"
-    :aria-label="`阅读：${news.title}`"
+    :aria-label="$t('detail.readArticle', { title: news.title })"
     @click="goToDetail"
     @keydown.enter.prevent="goToDetail"
     @keydown.space.prevent="goToDetail"
@@ -19,7 +19,7 @@
       <div class="news-info">
         <span>{{ news.author }}</span>
         <span>{{ news.publishTime }}</span>
-        <span>{{ news.views }} 阅读</span>
+        <span>{{ $t('common.views', { count: news.views }) }}</span>
       </div>
     </div>
     <div v-if="news.image" class="news-image">

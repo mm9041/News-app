@@ -1,7 +1,7 @@
 <template>
   <div class="profile-page">
     <van-nav-bar
-      title="个人信息"
+      :title="$t('profile.title')"
       left-arrow
       @click-left="$router.back()"
       fixed
@@ -9,7 +9,7 @@
     
     <div class="profile-container">
       <van-cell-group inset class="avatar-group">
-        <van-cell title="头像" center is-link @click="openEditor">
+        <van-cell :title="$t('profile.avatar')" center is-link @click="openEditor">
           <template #right-icon>
             <van-image round width="60" height="60" :src="avatarUrl" />
           </template>
@@ -17,34 +17,34 @@
       </van-cell-group>
       
       <van-cell-group inset class="info-group">
-        <van-cell title="用户名" :value="userInfo?.username || '-'" />
-        <van-cell title="昵称" :value="userInfo?.nickname || '未设置'" />
-        <van-cell title="性别" :value="genderText" />
-        <van-cell title="手机号" :value="userInfo?.phone || '未绑定'" />
-        <van-cell title="个人简介" :value="userBio || '暂无简介'" />
-        <van-cell title="编辑资料" is-link @click="openEditor" />
+        <van-cell :title="$t('profile.username')" :value="userInfo?.username || '-'" />
+        <van-cell :title="$t('profile.nickname')" :value="userInfo?.nickname || $t('profile.notSet')" />
+        <van-cell :title="$t('profile.gender')" :value="genderText" />
+        <van-cell :title="$t('profile.phone')" :value="userInfo?.phone || $t('profile.notBound')" />
+        <van-cell :title="$t('profile.bio')" :value="userBio || $t('profile.noBio')" />
+        <van-cell :title="$t('profile.editProfile')" is-link @click="openEditor" />
       </van-cell-group>
       
       <van-cell-group inset class="security-group">
-        <van-cell title="修改密码" is-link @click="showPasswordConfirm" />
+        <van-cell :title="$t('profile.changePassword')" is-link @click="showPasswordConfirm" />
       </van-cell-group>
     </div>
 
     <!-- 编辑资料 -->
     <van-popup v-model:show="showEditor" position="bottom" round :style="{ maxHeight: '85%' }">
       <div class="editor">
-        <div class="editor-title">编辑资料</div>
+        <div class="editor-title">{{ $t('profile.editTitle') }}</div>
         <van-form @submit="saveProfile">
           <van-field
             v-model="form.nickname"
-            label="昵称"
+            :label="$t('profile.nickname')"
             maxlength="50"
-            placeholder="评论和留言里显示这个名字"
+            :placeholder="$t('profile.nicknamePlaceholder')"
           />
-          <van-field v-model="form.avatar" label="头像" placeholder="图片 URL，或点右侧上传">
+          <van-field v-model="form.avatar" :label="$t('profile.avatar')" :placeholder="$t('profile.avatarPlaceholder')">
             <template #button>
               <van-button size="small" type="primary" plain :loading="uploading" @click="pickImage">
-                上传
+                {{ $t('common.upload') }}
               </van-button>
             </template>
           </van-field>
@@ -57,25 +57,25 @@
           />
           <van-field
             v-model="form.genderText"
-            label="性别"
+            :label="$t('profile.gender')"
             readonly
             is-link
             @click="showGenderPicker = true"
           />
-          <van-field v-model="form.phone" label="手机号" maxlength="20" placeholder="选填" />
+          <van-field v-model="form.phone" :label="$t('profile.phone')" maxlength="20" :placeholder="$t('profile.optional')" />
           <van-field
             v-model="form.bio"
-            label="简介"
+            :label="$t('profile.bio')"
             type="textarea"
             rows="3"
             autosize
             maxlength="500"
             show-word-limit
-            placeholder="介绍一下自己"
+            :placeholder="$t('profile.bioPlaceholder')"
           />
 
           <div class="editor-actions">
-            <van-button block type="primary" native-type="submit" :loading="saving">保存</van-button>
+            <van-button block type="primary" native-type="submit" :loading="saving">{{ $t('profile.save') }}</van-button>
           </div>
         </van-form>
       </div>
@@ -96,10 +96,12 @@ import { ref, computed, h, onMounted } from 'vue';
 import { useUserStore } from '../store/user';
 import { showDialog, showToast, showLoadingToast, showSuccessToast, showFailToast } from 'vant';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { uploadImage } from '../api/upload';
 
 const router = useRouter();
 const userStore = useUserStore();
+const { t } = useI18n();
 
 // 初始化用户状态
 onMounted(async () => {
@@ -113,7 +115,7 @@ onMounted(async () => {
   try {
     // 显示加载提示
     const loadingInstance = showLoadingToast({
-      message: '加载中...',
+      message: t('profile.loadingProfile'),
       forbidClick: true,
       duration: 0
     });
@@ -129,29 +131,33 @@ onMounted(async () => {
       // showSuccessToast('获取用户信息成功');
     } else {
       console.error('获取用户信息失败:', result.message);
-      showFailToast(result.message || '获取用户信息失败');
+      showFailToast(t('profile.loadFailed'));
     }
   } catch (error) {
     console.error('获取用户信息请求失败:', error);
     // 确保关闭加载提示
     showToast.clear();
-    showToast.fail('获取用户信息失败');
+    showToast.fail(t('profile.loadFailed'));
   }
 });
 
 const userInfo = computed(() => userStore.userInfo);
-const userBio = computed(() => userStore.userInfo?.bio || '暂无简介');
+const userBio = computed(() => userStore.userInfo?.bio || t('profile.noBio'));
 const avatarUrl = computed(
   () => userStore.userInfo?.avatar || 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg'
 );
 
-const GENDER_LABELS = { male: '男', female: '女', unknown: '保密' };
-const genderColumns = [
-  { text: '男', value: 'male' },
-  { text: '女', value: 'female' },
-  { text: '保密', value: 'unknown' }
-];
-const genderText = computed(() => GENDER_LABELS[userStore.userInfo?.gender] || '保密');
+const genderLabel = gender => {
+  if (gender === 'male') return t('profile.genderMale');
+  if (gender === 'female') return t('profile.genderFemale');
+  return t('profile.genderUnknown');
+};
+const genderColumns = computed(() => [
+  { text: t('profile.genderMale'), value: 'male' },
+  { text: t('profile.genderFemale'), value: 'female' },
+  { text: t('profile.genderUnknown'), value: 'unknown' }
+]);
+const genderText = computed(() => genderLabel(userStore.userInfo?.gender));
 
 const showEditor = ref(false);
 const showGenderPicker = ref(false);
@@ -162,7 +168,7 @@ const form = ref({
   nickname: '',
   avatar: '',
   gender: 'unknown',
-  genderText: '保密',
+  genderText: '',
   bio: '',
   phone: ''
 });
@@ -174,7 +180,7 @@ const openEditor = () => {
     nickname: info.nickname || '',
     avatar: info.avatar || '',
     gender,
-    genderText: GENDER_LABELS[gender] || '保密',
+    genderText: genderLabel(gender),
     bio: info.bio || '',
     phone: info.phone || ''
   };
@@ -200,9 +206,9 @@ const onFileChange = async event => {
   uploading.value = true;
   try {
     form.value.avatar = await uploadImage(file);
-    showSuccessToast('上传成功');
+    showSuccessToast(t('common.uploadSuccess'));
   } catch (error) {
-    showFailToast(error.message || '上传失败');
+    showFailToast(t('common.uploadFailed'));
   } finally {
     uploading.value = false;
   }
@@ -228,10 +234,10 @@ const saveProfile = async () => {
 
     const result = await userStore.updateUserProfile(payload);
     if (result.success) {
-      showSuccessToast('已保存');
+      showSuccessToast(t('common.saveSuccess'));
       showEditor.value = false;
     } else {
-      showFailToast(result.message || '保存失败');
+      showFailToast(t('profile.saveFailed'));
     }
   } finally {
     saving.value = false;
@@ -245,12 +251,12 @@ const showPasswordConfirm = () => {
   const confirmPassword = ref('');
   
   showDialog({
-    title: '修改密码',
+    title: t('profile.changePassword'),
     showCancelButton: true,
     className: 'password-dialog',
     message: h('div', { style: 'text-align: left; padding: 10px 0;' }, [
       h('div', { style: 'margin-bottom: 15px;' }, [
-        h('div', { style: 'margin-bottom: 5px; text-align: left;' }, '当前密码：'),
+        h('div', { style: 'margin-bottom: 5px; text-align: left;' }, t('profile.passwordCurrent')),
         h('input', {
           type: 'password',
           value: oldPassword.value,
@@ -259,7 +265,7 @@ const showPasswordConfirm = () => {
         })
       ]),
       h('div', { style: 'margin-bottom: 15px;' }, [
-        h('div', { style: 'margin-bottom: 5px; text-align: left;' }, '新密码：'),
+        h('div', { style: 'margin-bottom: 5px; text-align: left;' }, t('profile.passwordNew')),
         h('input', {
           type: 'password',
           value: newPassword.value,
@@ -268,7 +274,7 @@ const showPasswordConfirm = () => {
         })
       ]),
       h('div', { style: 'margin-bottom: 15px;' }, [
-        h('div', { style: 'margin-bottom: 5px; text-align: left;' }, '确认密码：'),
+        h('div', { style: 'margin-bottom: 5px; text-align: left;' }, t('profile.passwordConfirm')),
         h('input', {
           type: 'password',
           value: confirmPassword.value,
@@ -280,24 +286,24 @@ const showPasswordConfirm = () => {
   }).then(async () => {
     // 点击确认按钮
     if (!oldPassword.value) {
-      showToast('请输入当前密码');
+      showToast(t('profile.passwordCurrentRequired'));
       return;
     }
     
     if (!newPassword.value) {
-      showToast('请输入新密码');
+      showToast(t('profile.passwordNewRequired'));
       return;
     }
     
     if (newPassword.value !== confirmPassword.value) {
-      showToast('两次密码输入不一致');
+      showToast(t('profile.passwordMismatch'));
       return;
     }
     
     try {
       // 显示加载提示
       const loadingInstance = showLoadingToast({
-        message: '修改中...',
+        message: t('profile.passwordChanging'),
         forbidClick: true,
         duration: 0
       });
@@ -309,14 +315,14 @@ const showPasswordConfirm = () => {
       loadingInstance.close();
       
       if (result && result.success) {
-        showSuccessToast('密码修改成功');
+        showSuccessToast(t('profile.passwordChanged'));
       } else {
-        showFailToast((result && result.message) || '密码修改失败');
+        showFailToast(t('profile.passwordChangeFailed'));
       }
     } catch (error) {
       console.error('修改密码失败:', error);
       showToast.clear();
-      showToast.fail('密码修改失败');
+      showToast.fail(t('profile.passwordChangeFailed'));
     }
   }).catch(() => {
     // 点击取消按钮

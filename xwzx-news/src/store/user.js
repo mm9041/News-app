@@ -5,7 +5,7 @@ export const useUserStore = defineStore('user', {
   state: () => ({
     userInfo: null,
     isLogin: false,
-    userBio: '这是我的个人简介'
+    userBio: ''
   }),
 
   getters: {

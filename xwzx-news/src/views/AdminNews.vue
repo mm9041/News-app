@@ -1,15 +1,15 @@
 <template>
   <div class="admin-page">
-    <van-nav-bar title="新闻管理" left-arrow fixed @click-left="goBack">
+    <van-nav-bar :title="$t('admin.news.title')" left-arrow fixed @click-left="goBack">
       <template #right>
-        <span class="nav-action" @click="openCreate">新建</span>
+        <span class="nav-action" @click="openCreate">{{ $t('admin.news.create') }}</span>
       </template>
     </van-nav-bar>
 
     <div class="toolbar">
       <van-search
         v-model="keyword"
-        placeholder="搜索标题或作者"
+        :placeholder="$t('admin.news.searchPlaceholder')"
         shape="round"
         @search="reload"
         @clear="reload"
@@ -21,53 +21,53 @@
         v-model:loading="loading"
         :finished="finished"
         :immediate-check="false"
-        finished-text="没有更多了"
+        :finished-text="$t('admin.common.noMore')"
         @load="loadMore"
       >
         <van-cell
           v-for="item in list"
           :key="item.id"
           :title="item.title"
-          :label="`${categoryName(item.categoryId)} · ${formatTime(item.publishTime)} · ${item.views} 阅读`"
+          :label="$t('admin.news.meta', { category: categoryName(item.categoryId), time: formatTime(item.publishTime), views: item.views })"
           is-link
           @click="openEdit(item)"
         />
       </van-list>
 
-      <van-empty v-if="!loading && !list.length" description="没有新闻，点右上角新建" />
+      <van-empty v-if="!loading && !list.length" :description="$t('admin.news.empty')" />
     </div>
 
     <!-- 新建 / 编辑 -->
     <van-popup v-model:show="showForm" position="bottom" round :style="{ height: '92%' }">
       <div class="form-wrap">
-        <div class="form-title">{{ editingId ? '编辑新闻' : '新建新闻' }}</div>
+        <div class="form-title">{{ editingId ? $t('admin.news.editTitle') : $t('admin.news.createTitle') }}</div>
 
         <van-form @submit="save">
           <van-field
             v-model="form.title"
-            label="标题"
-            placeholder="必填"
-            :rules="[{ required: true, message: '请输入标题' }]"
+            :label="$t('admin.news.title')"
+            :placeholder="$t('admin.news.titlePlaceholder')"
+            :rules="[{ required: true, message: $t('admin.news.titleRequired') }]"
           />
           <van-field
             v-model="form.categoryName"
-            label="分类"
+            :label="$t('admin.news.category')"
             readonly
             is-link
-            placeholder="选择分类"
-            :rules="[{ required: true, message: '请选择分类' }]"
+            :placeholder="$t('admin.news.categoryPlaceholder')"
+            :rules="[{ required: true, message: $t('admin.news.categoryRequired') }]"
             @click="showCategoryPicker = true"
           />
-          <van-field v-model="form.author" label="作者" placeholder="选填" />
+          <van-field v-model="form.author" :label="$t('admin.news.author')" :placeholder="$t('admin.news.authorPlaceholder')" />
           <van-field
             v-model="form.tagsText"
-            label="标签"
-            placeholder="逗号分隔，最多 5 个"
+            :label="$t('admin.news.tags')"
+            :placeholder="$t('admin.news.tagsPlaceholder')"
           />
-          <van-field v-model="form.image" label="封面图" placeholder="图片 URL，或点右侧上传">
+          <van-field v-model="form.image" :label="$t('admin.news.cover')" :placeholder="$t('admin.news.coverPlaceholder')">
             <template #button>
               <van-button size="small" type="primary" plain :loading="uploading" @click="pickImage">
-                上传
+                {{ $t('admin.news.upload') }}
               </van-button>
             </template>
           </van-field>
@@ -80,24 +80,24 @@
           />
           <van-field
             v-model="form.description"
-            label="摘要"
+            :label="$t('admin.news.summary')"
             type="textarea"
             rows="2"
             autosize
-            placeholder="选填，列表页展示这一句"
+            :placeholder="$t('admin.news.summaryPlaceholder')"
           />
           <van-field
             v-model="form.content"
-            label="正文"
+            :label="$t('admin.news.content')"
             type="textarea"
             rows="8"
             autosize
-            placeholder="必填，用一个空行分段"
-            :rules="[{ required: true, message: '请输入正文' }]"
+            :placeholder="$t('admin.news.contentPlaceholder')"
+            :rules="[{ required: true, message: $t('admin.news.contentRequired') }]"
           />
 
           <div class="form-actions">
-            <van-button block type="primary" native-type="submit" :loading="saving">保存</van-button>
+            <van-button block type="primary" native-type="submit" :loading="saving">{{ $t('admin.news.save') }}</van-button>
             <van-button
               v-if="editingId"
               block
@@ -106,7 +106,7 @@
               :loading="removing"
               @click="remove"
             >
-              删除这条新闻
+              {{ $t('admin.news.deleteNews') }}
             </van-button>
           </div>
         </van-form>
@@ -127,12 +127,15 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 
 import http from '../api/http'
+import { categoryLabel, isMoreCategory } from '../i18n/categories'
 import { uploadImage } from '../api/upload'
 import { useNewsStore } from '../store/modules/news'
 
 const router = useRouter()
+const { t } = useI18n()
 const newsStore = useNewsStore()
 
 const PAGE_SIZE = 10
@@ -173,10 +176,15 @@ function emptyForm() {
   }
 }
 
-const categories = computed(() => newsStore.categories.filter(item => item.name !== '更多'))
-const categoryColumns = computed(() => categories.value.map(item => ({ text: item.name, value: item.id })))
+const categories = computed(() => newsStore.categories.filter(item => !isMoreCategory(item.name)))
+const categoryColumns = computed(() =>
+  categories.value.map(item => ({ text: categoryLabel(item.name, t), value: item.id }))
+)
 
-const categoryName = id => categories.value.find(item => item.id === id)?.name || '未分类'
+const categoryName = id => {
+  const name = categories.value.find(item => item.id === id)?.name
+  return name ? categoryLabel(name, t) : t('admin.news.uncategorized')
+}
 const formatTime = value => (value ? String(value).replace('T', ' ').slice(0, 16) : '—')
 
 const goBack = () => router.back()
@@ -237,7 +245,7 @@ const openCreate = () => {
   const first = categories.value[0]
   if (first) {
     form.value.categoryId = first.id
-    form.value.categoryName = first.name
+    form.value.categoryName = categoryLabel(first.name, t)
   }
   showForm.value = true
 }
@@ -283,9 +291,9 @@ const onFileChange = async event => {
   uploading.value = true
   try {
     form.value.image = await uploadImage(file)
-    showToast('上传成功')
+    showToast(t('admin.news.uploadSuccess'))
   } catch (error) {
-    showToast(error.message || '上传失败')
+    showToast(t('admin.news.uploadFailed'))
   } finally {
     uploading.value = false
   }
@@ -311,14 +319,14 @@ const buildPayload = () => ({
 
 const save = async () => {
   if (!form.value.categoryId) {
-    showToast('请选择分类')
+    showToast(t('admin.news.selectCategoryFirst'))
     return
   }
 
   // tag.name 是 VARCHAR(30)，超长会被数据库静默截断（不同长标签还可能撞成同一个）
   const tooLongTag = parseTags().find(item => item.length > 30)
   if (tooLongTag) {
-    showToast(`标签「${tooLongTag}」不能超过 30 个字符`)
+    showToast(t('admin.news.tagTooLong', { tag: tooLongTag }))
     return
   }
 
@@ -326,10 +334,10 @@ const save = async () => {
   try {
     if (editingId.value) {
       await http.put(`/api/admin/news/${editingId.value}`, buildPayload())
-      showToast('已保存')
+      showToast(t('admin.news.saved'))
     } else {
       await http.post('/api/admin/news', buildPayload())
-      showToast('已创建')
+      showToast(t('admin.news.created'))
     }
     showForm.value = false
     await reload()
@@ -342,7 +350,7 @@ const save = async () => {
 
 const remove = async () => {
   try {
-    await showConfirmDialog({ title: '删除确认', message: '删除后不可恢复，确定删除这条新闻？' })
+    await showConfirmDialog({ title: t('admin.news.deleteTitle'), message: t('admin.news.deleteMessage') })
   } catch (error) {
     return
   }
@@ -350,7 +358,7 @@ const remove = async () => {
   removing.value = true
   try {
     await http.delete(`/api/admin/news/${editingId.value}`)
-    showToast('已删除')
+    showToast(t('admin.news.deleted'))
     showForm.value = false
     await reload()
   } catch (error) {

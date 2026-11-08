@@ -2,14 +2,14 @@
   <div class="home">
     <van-nav-bar :title="$t('home.title')" fixed>
       <template #right>
-        <button type="button" class="nav-search" aria-label="搜索新闻" @click="goSearch">
+        <button type="button" class="nav-search" :aria-label="$t('home.searchAria')" @click="goSearch">
           <van-icon name="search" size="20" />
         </button>
       </template>
     </van-nav-bar>
     
     <div class="recommend-section" v-if="newsStore.recommendations.length">
-      <div class="recommend-header">猜你喜欢</div>
+      <div class="recommend-header">{{ $t('home.recommended') }}</div>
       <div class="recommend-scroll">
         <button
           v-for="item in newsStore.recommendations"
@@ -211,8 +211,12 @@ const onLoad = () => {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--primary-color);
+  color: var(--icon-color);
   place-items: center;
+}
+
+.nav-search:active {
+  color: var(--primary-color);
 }
 
 .recommend-section {

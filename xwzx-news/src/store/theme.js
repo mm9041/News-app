@@ -12,9 +12,14 @@ export const useThemeStore = defineStore('theme', {
         textColor: '#323233',
         textColorLight: '#646566',
         textColorLighter: '#969799',
+        iconColor: '#323233',
+        iconColorMuted: '#969799',
         borderColor: '#ebedf0',
         primaryColor: '#1989fa',
         secondaryColor: '#f5f5f5',
+        previewColor: '#ffffff',
+        previewBorder: '#c9ced6',
+        previewForeground: '#323233',
       },
       dark: {
         name: '深色模式',
@@ -24,9 +29,14 @@ export const useThemeStore = defineStore('theme', {
         textColor: '#f5f5f5',
         textColorLight: '#c8c9cc',
         textColorLighter: '#969799',
+        iconColor: '#f2f3f5',
+        iconColorMuted: '#b6bac2',
         borderColor: '#3a3a3a',
         primaryColor: '#4c8bf5',
         secondaryColor: '#2d2d2d',
+        previewColor: '#1f1f1f',
+        previewBorder: '#6b7078',
+        previewForeground: '#f5f5f5',
       },
       blue: {
         name: '蓝色主题',
@@ -36,9 +46,14 @@ export const useThemeStore = defineStore('theme', {
         textColor: '#263445',
         textColorLight: '#506070',
         textColorLighter: '#7a8b9d',
+        iconColor: '#263445',
+        iconColorMuted: '#7a8b9d',
         borderColor: '#d6e4f0',
         primaryColor: '#1890ff',
         secondaryColor: '#bae7ff',
+        previewColor: '#1890ff',
+        previewBorder: '#1890ff',
+        previewForeground: '#ffffff',
       },
       green: {
         name: '绿色主题',
@@ -48,9 +63,14 @@ export const useThemeStore = defineStore('theme', {
         textColor: '#263326',
         textColorLight: '#526152',
         textColorLighter: '#7d8b7d',
+        iconColor: '#263326',
+        iconColorMuted: '#7d8b7d',
         borderColor: '#d9e8d2',
         primaryColor: '#52c41a',
         secondaryColor: '#d9f7be',
+        previewColor: '#52c41a',
+        previewBorder: '#52c41a',
+        previewForeground: '#ffffff',
       }
     }
   }),
@@ -61,7 +81,10 @@ export const useThemeStore = defineStore('theme', {
     getAllThemes: (state) => Object.keys(state.themes).map(key => ({
       id: key,
       name: state.themes[key].name,
-      primaryColor: state.themes[key].primaryColor
+      primaryColor: state.themes[key].primaryColor,
+      previewColor: state.themes[key].previewColor,
+      previewBorder: state.themes[key].previewBorder,
+      previewForeground: state.themes[key].previewForeground,
     }))
   },
   
@@ -85,6 +108,8 @@ export const useThemeStore = defineStore('theme', {
       root.style.setProperty('--text-color', theme.textColor);
       root.style.setProperty('--text-color-light', theme.textColorLight);
       root.style.setProperty('--text-color-lighter', theme.textColorLighter);
+      root.style.setProperty('--icon-color', theme.iconColor);
+      root.style.setProperty('--icon-color-muted', theme.iconColorMuted);
       root.style.setProperty('--border-color', theme.borderColor);
       root.style.setProperty('--primary-color', theme.primaryColor);
       root.style.setProperty('--secondary-color', theme.secondaryColor);

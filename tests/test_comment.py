@@ -21,9 +21,12 @@ def _add(client, token, content, news_id=NEWS_ID):
     )
 
 
-def _list(client, token=None, news_id=NEWS_ID):
+def _list(client, token=None, news_id=NEWS_ID, page_size=None):
     headers = {"Authorization": token} if token else {}
-    return client.get("/api/comment", params={"newsId": news_id}, headers=headers)
+    params = {"newsId": news_id}
+    if page_size:
+        params["pageSize"] = page_size
+    return client.get("/api/comment", params=params, headers=headers)
 
 
 @pytest.fixture
@@ -98,6 +101,36 @@ def test_list_is_newest_first(client, temp_user):
     finally:
         for comment_id in ids:
             client.delete(f"/api/comment/{comment_id}", headers={"Authorization": temp_user["token"]})
+
+
+def test_total_includes_replies_and_paging_uses_roots(client, temp_user):
+    """total 要含回复；hasMore 只看一级评论，不能被回复数量带偏。
+
+    先取基线再断言增量，避免依赖 45 号新闻里已有的种子评论。
+    """
+    headers = {"Authorization": temp_user["token"]}
+    baseline = _list(client).json()["data"]["total"]
+
+    root = _add(client, temp_user["token"], "计数用一级评论")
+    assert root.status_code == 201
+    root_id = root.json()["data"]["id"]
+
+    try:
+        for i in range(2):
+            resp = client.post(
+                "/api/comment",
+                json={"newsId": NEWS_ID, "content": f"计数用回复 {i}", "parentId": root_id},
+                headers=headers,
+            )
+            assert resp.status_code == 201, resp.text
+
+        data = _list(client, page_size=100).json()["data"]
+        # 1 条一级 + 2 条回复，全部计入总数
+        assert data["total"] == baseline + 3
+        # 一级评论一页就能装下，回复再多也不能说「还有下一页」
+        assert data["hasMore"] is False
+    finally:
+        client.delete(f"/api/comment/{root_id}", headers=headers)
 
 
 @pytest.mark.parametrize("content", ["", "   ", "x" * 501])

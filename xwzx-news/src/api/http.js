@@ -2,6 +2,8 @@ import axios from 'axios'
 import { showToast } from 'vant'
 
 import { apiConfig } from '../config/api'
+import { i18n } from '../i18n'
+import { localizeApiMessage } from '../i18n/apiMessages'
 import router from '../router'
 
 /**
@@ -31,6 +33,10 @@ http.interceptors.response.use(
   (error) => {
     const status = error.response?.status
 
+    if (error.response?.data?.message) {
+      error.response.data.message = localizeApiMessage(error.response.data.message)
+    }
+
     if (status === 401) {
       onUnauthorized?.()
 
@@ -42,12 +48,12 @@ http.interceptors.response.use(
 
       // 登录接口自己返回 401（账号密码错）时不该弹「登录已过期」
       if (router.currentRoute.value.path !== '/login') {
-        showToast('登录已过期，请重新登录')
+        showToast(i18n.global.t('common.sessionExpired'))
         router.push('/login')
       }
     } else if (!error.response) {
       // 请求根本没到达服务端：超时、断网、服务没起
-      showToast('网络异常，请检查连接后重试')
+      showToast(i18n.global.t('common.networkError'))
     }
 
     return Promise.reject(error)

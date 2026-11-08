@@ -1,17 +1,17 @@
 <template>
   <div class="ai-chat-container">
-    <van-nav-bar title="AI问答" fixed>
+    <van-nav-bar :title="$t('aiChat.title')" fixed>
       <template #left>
-        <span class="nav-action" @click="openHistory">历史</span>
+        <span class="nav-action" @click="openHistory">{{ $t('aiChat.history') }}</span>
       </template>
       <template #right>
-        <span class="nav-action" @click="startNewChat">新对话</span>
+        <span class="nav-action" @click="startNewChat">{{ $t('aiChat.newChat') }}</span>
       </template>
     </van-nav-bar>
     
     <div class="login-tip" v-if="!isLogin" @click="goToLogin">
-      登录后即可与 AI 对话，聊天记录会保存到你的账号
-      <span class="login-tip-action">去登录</span>
+      {{ $t('aiChat.loginTip') }}
+      <span class="login-tip-action">{{ $t('aiChat.loginAction') }}</span>
     </div>
 
     <div class="chat-content">
@@ -38,7 +38,7 @@
           rows="1"
           autosize
           type="textarea"
-          placeholder="请输入问题..."
+          :placeholder="$t('aiChat.placeholder')"
           class="chat-input"
           @keypress.enter.prevent="sendMessage"
         />
@@ -48,7 +48,7 @@
           :disabled="isLoading || !userInput.trim()" 
           @click="sendMessage"
         >
-          发送
+          {{ $t('aiChat.send') }}
         </van-button>
       </div>
     </div>
@@ -60,8 +60,8 @@
     >
       <div class="history-panel">
         <div class="history-header">
-          <span>历史对话</span>
-          <span class="history-new" @click="startNewChat">+ 新对话</span>
+          <span>{{ $t('aiChat.historyTitle') }}</span>
+          <span class="history-new" @click="startNewChat">{{ $t('aiChat.newChatAction') }}</span>
         </div>
 
         <div v-if="conversations.length" class="conv-list">
@@ -73,11 +73,11 @@
             @click="selectConversation(conv)"
           >
             <div class="conv-title">{{ conv.title }}</div>
-            <div class="conv-meta">{{ conv.messageCount }} 轮 · {{ formatTime(conv.updatedAt) }}</div>
-            <span class="conv-delete" @click.stop="removeConversation(conv)">删除</span>
+            <div class="conv-meta">{{ $t('aiChat.rounds', { count: conv.messageCount }) }} · {{ formatTime(conv.updatedAt) }}</div>
+            <span class="conv-delete" @click.stop="removeConversation(conv)">{{ $t('aiChat.delete') }}</span>
           </div>
         </div>
-        <van-empty v-else description="还没有历史对话" image-size="60" />
+        <van-empty v-else :description="$t('aiChat.emptyHistory')" image-size="60" />
       </div>
     </van-popup>
 
@@ -88,7 +88,9 @@
 <script setup>
 import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import http from '../api/http';
+import { localizeApiMessage } from '../i18n/apiMessages';
 import TabBar from '../components/TabBar.vue';
 import * as marked from 'marked';
 import DOMPurify from 'dompurify';
@@ -98,13 +100,15 @@ import { aiChatConfig } from '../config/api';
 
 const router = useRouter();
 const userStore = useUserStore();
+const { t } = useI18n();
 // 后端 /api/ai/chat 需要登录（Key 在服务端，聊天记录要挂到账号下）
 const isLogin = computed(() => userStore.getLoginStatus);
 const goToLogin = () => router.push('/login');
 
 // 聊天消息
+const defaultGreeting = t('aiChat.greeting');
 const messages = ref([
-  { role: 'assistant', content: '你好！我是AI助手，有什么可以帮助你的吗？' }
+  { role: 'assistant', content: defaultGreeting }
 ]);
 const userInput = ref('');
 const messagesContainer = ref(null);
@@ -118,7 +122,6 @@ const conversationId = ref(null);
 const conversations = ref([]);
 const showHistory = ref(false);
 const historyLoading = ref(false);
-const defaultGreeting = '你好！我是AI助手，有什么可以帮助你的吗？';
 
 // 本页是 keep-alive 缓存的，onMounted 与 onActivated 会在同一个 tick 里先后触发，
 // 用它防重复初始化（置位必须在 await 之前）
@@ -144,7 +147,7 @@ const loadConversations = async () => {
 
 const openHistory = async () => {
   if (!isLogin.value) {
-    showToast('请先登录');
+    showToast(t('common.loginRequired'));
     return;
   }
   showHistory.value = true;
@@ -183,7 +186,7 @@ const startNewChat = () => {
 
 const removeConversation = async (conv) => {
   try {
-    await showConfirmDialog({ title: '删除对话', message: '删除后不可恢复，确定删除？' });
+    await showConfirmDialog({ title: t('aiChat.deleteTitle'), message: t('aiChat.deleteMessage') });
   } catch (error) {
     return;
   }
@@ -194,7 +197,7 @@ const removeConversation = async (conv) => {
     if (conversationId.value === conv.id) {
       startNewChat();
     }
-    showToast('已删除');
+    showToast(t('aiChat.deleted'));
   } catch (error) {
     // 拦截器已提示
   }
@@ -223,7 +226,7 @@ const sendMessage = async () => {
 
   // 登录校验必须放在最前面：否则被拦下后会在消息列表里留下一条孤立的提问
   if (!isLogin.value || !userStore.isLogin) {
-    showToast('请先登录后再使用 AI 问答');
+    showToast(t('aiChat.loginRequired'));
     router.push('/login');
     return;
   }
@@ -247,7 +250,9 @@ const sendMessage = async () => {
   } catch (error) {
     console.error('Error fetching AI response:', error);
     // 更新最后一条消息为错误信息
-    messages.value[messages.value.length - 1].content = `发生错误: ${error.message || '请检查网络连接和API设置'}`;
+    messages.value[messages.value.length - 1].content = t('aiChat.errorPrefix', {
+      message: error.message || t('common.operationFailed')
+    });
   } finally {
     isLoading.value = false;
     await nextTick();
@@ -297,9 +302,9 @@ const fetchAIResponse = async (userMessage) => {
     if (response.status === 401) {
       // token 过期或无效：清掉本地登录态并引导重新登录
       userStore.logout();
-      showToast('登录已过期，请重新登录');
+      showToast(t('aiChat.sessionExpired'));
       router.push('/login');
-      throw new Error('登录已过期，请重新登录');
+      throw new Error(t('aiChat.sessionExpired'));
     }
 
     // 首次对话时后端会新建会话，并通过响应头把 id 回传，前端无需额外请求
@@ -311,7 +316,7 @@ const fetchAIResponse = async (userMessage) => {
     if (!response.ok) {
       // 后端统一返回 {code, message, data}
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `HTTP error! status: ${response.status}`);
+      throw new Error(localizeApiMessage(error.message) || `HTTP error! status: ${response.status}`);
     }
     
     // 处理SSE流
@@ -342,7 +347,7 @@ const fetchAIResponse = async (userMessage) => {
         }
         // 后端透传的上游错误（如 401 / 限流），直接抛出去让用户看到原因
         if (json.error) {
-          throw new Error(`上游服务返回：${json.error}`);
+          throw new Error(t('aiChat.upstreamError', { error: json.error }));
         }
         // 适配 OpenAI 兼容格式与阿里云 DashScope 原生格式
         const content = json.choices?.[0]?.delta?.content || 
@@ -361,7 +366,7 @@ const fetchAIResponse = async (userMessage) => {
   
   // 如果没有收到任何内容
   if (!aiResponse) {
-    messages.value[messages.value.length - 1].content = '抱歉，我无法生成回复。请检查API设置或稍后再试。';
+    messages.value[messages.value.length - 1].content = t('aiChat.noResponse');
   }
   } catch (error) {
     console.error('Fetch error:', error);

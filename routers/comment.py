@@ -48,9 +48,13 @@ async def list_comments(
     db: AsyncSession = Depends(get_database),
     current_user: User | None = Depends(get_optional_user),
 ):
-    """一级评论分页，每条带出它下面的全部回复。"""
+    """一级评论分页，每条带出它下面的全部回复。
+
+    `total` 是评论总数（含回复），`hasMore` 按一级评论数判断 ——
+    两者单位不同，不能互相替代。
+    """
     skip = (page - 1) * page_size
-    roots, replies_map, total = await comment_crud.list_comments(db, news_id, skip, page_size)
+    roots, replies_map, total, root_total = await comment_crud.list_comments(db, news_id, skip, page_size)
 
     items = []
     for comment, author in roots:
@@ -81,7 +85,7 @@ async def list_comments(
     data = CommentListResponse(
         list=items,
         total=total,
-        has_more=calc_has_more(total, skip, len(items)),
+        has_more=calc_has_more(root_total, skip, len(items)),
     )
     return success_response(data=data, message="获取评论成功")
 

@@ -1,6 +1,7 @@
 # 密钥与本地配置
 .env
-.env.local
+.env.*
+!.env.example
 
 # Python
 __pycache__/
@@ -8,6 +9,18 @@ __pycache__/
 .venv/
 .idea/
 .pytest_cache/
+.ruff_cache/
+
+# 测试与覆盖率产物
+.coverage
+coverage.xml
+htmlcov/
+
+# 系统/编辑器杂项
+.DS_Store
+Thumbs.db
+*.pid
+logs/
 
 # 前端
 node_modules/

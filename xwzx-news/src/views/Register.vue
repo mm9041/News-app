@@ -1,7 +1,7 @@
 <template>
   <div class="register-page">
     <van-nav-bar
-      title="用户注册"
+      :title="$t('auth.registerTitle')"
       left-arrow
       @click-left="onClickLeft"
       fixed
@@ -15,7 +15,7 @@
           src="https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg"
           round
         />
-        <h2>新闻资讯</h2>
+        <h2>{{ $t('auth.brand') }}</h2>
       </div>
       
       <van-form @submit="onSubmit" class="register-form">
@@ -23,45 +23,45 @@
           <van-field
             v-model="username"
             name="username"
-            label="用户名"
-            placeholder="请输入用户名"
+            :label="$t('auth.username')"
+            :placeholder="$t('auth.usernamePlaceholder')"
             :rules="[
-              { required: true, message: '请填写用户名' },
-              { validator: validateUsername, message: '用户名需 3-50 个字符' }
+              { required: true, message: $t('auth.usernameRequired') },
+              { validator: validateUsername, message: $t('auth.usernameRule') }
             ]"
           />
           <van-field
             v-model="password"
             type="password"
             name="password"
-            label="密码"
-            placeholder="请输入密码"
+            :label="$t('auth.password')"
+            :placeholder="$t('auth.passwordPlaceholder')"
             :rules="[
-              { required: true, message: '请填写密码' },
-              { validator: validatePasswordLength, message: '密码需 6-72 位' }
+              { required: true, message: $t('auth.passwordRequired') },
+              { validator: validatePasswordLength, message: $t('auth.passwordRule') }
             ]"
           />
           <van-field
             v-model="confirmPassword"
             type="password"
             name="confirmPassword"
-            label="确认密码"
-            placeholder="请再次输入密码"
+            :label="$t('auth.confirmPassword')"
+            :placeholder="$t('auth.confirmPasswordPlaceholder')"
             :rules="[
-              { required: true, message: '请确认密码' },
-              { validator: validatePassword, message: '两次密码不一致' }
+              { required: true, message: $t('auth.confirmPasswordRequired') },
+              { validator: validatePassword, message: $t('auth.passwordMismatch') }
             ]"
           />
         </van-cell-group>
         
         <div class="submit-btn">
           <van-button round block type="primary" native-type="submit" size="large">
-            注册
+            {{ $t('auth.registerAction') }}
           </van-button>
         </div>
         
         <div class="login-link">
-          已有账号？<span @click="goToLogin">去登录</span>
+          {{ $t('auth.haveAccount') }}<span @click="goToLogin">{{ $t('auth.goLogin') }}</span>
         </div>
       </van-form>
     </div>
@@ -72,10 +72,12 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
+import { useI18n } from 'vue-i18n';
 import { useUserStore } from '../store/user';
 
 const router = useRouter();
 const userStore = useUserStore();
+const { t } = useI18n();
 
 const username = ref('');
 const password = ref('');
@@ -103,7 +105,7 @@ const onSubmit = async () => {
   // 显示加载提示
   showToast({
     type: 'loading',
-    message: '注册中...',
+    message: t('auth.registering'),
     forbidClick: true,
     duration: 0
   });
@@ -118,20 +120,20 @@ const onSubmit = async () => {
     if (result.success) {
       showToast({
         type: 'success',
-        message: result.message
+        message: t('auth.registerSuccess')
       });
       
       router.push('/');
     } else {
       showToast({
         type: 'fail',
-        message: result.message
+        message: t('auth.registerFailed')
       });
     }
   } catch (error) {
     showToast({
       type: 'fail',
-      message: '注册失败，请稍后再试'
+      message: t('auth.registerFailed')
     });
   }
 };
@@ -176,6 +178,10 @@ const goToLogin = () => {
 
 .submit-btn {
   margin: 24px 16px;
+}
+
+.login-link span {
+  margin-left: 4px;
 }
 
 .login-link {

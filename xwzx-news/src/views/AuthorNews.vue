@@ -7,7 +7,7 @@
           :class="{ 'is-following': isFollowing }"
           @click="toggleFollow"
         >
-          {{ isFollowing ? '已关注' : '+ 关注' }}
+          {{ isFollowing ? $t('author.following') : $t('author.follow') }}
         </span>
       </template>
     </van-nav-bar>
@@ -15,11 +15,11 @@
     <div class="list-area">
       <news-item v-for="item in list" :key="item.id" :news="item" />
 
-      <div v-if="hasMore" class="load-more" @click="load()">加载更多</div>
+      <div v-if="hasMore" class="load-more" @click="load()">{{ $t('common.loadMore') }}</div>
       <div v-else-if="loaded && !list.length" class="empty">
-        <van-empty description="该作者下还没有新闻" />
+        <van-empty :description="$t('author.empty')" />
       </div>
-      <div v-else-if="loaded" class="load-more load-end">没有更多了</div>
+      <div v-else-if="loaded" class="load-more load-end">{{ $t('common.noMore') }}</div>
     </div>
 
     <tab-bar />
@@ -30,6 +30,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 
 import http from '../api/http'
 import NewsItem from '../components/NewsItem.vue'
@@ -39,6 +40,7 @@ import { useUserStore } from '../store/user'
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const { t } = useI18n()
 
 const PAGE_SIZE = 10
 
@@ -52,7 +54,7 @@ let fetching = false
 let followLoading = false
 
 const authorName = computed(() => route.params.name || '')
-const title = computed(() => authorName.value || '作者')
+const title = computed(() => authorName.value || t('author.fallback'))
 
 const goBack = () => router.back()
 
@@ -99,7 +101,7 @@ const loadFollowState = async () => {
 
 const toggleFollow = async () => {
   if (!userStore.getLoginStatus) {
-    showToast('请先登录')
+    showToast(t('common.loginRequired'))
     router.push('/login')
     return
   }
@@ -110,11 +112,11 @@ const toggleFollow = async () => {
     if (isFollowing.value) {
       await http.delete('/api/follow', { params: { name: authorName.value } })
       isFollowing.value = false
-      showToast('已取消关注')
+      showToast(t('author.unfollowed'))
     } else {
       await http.post('/api/follow', null, { params: { name: authorName.value } })
       isFollowing.value = true
-      showToast('已关注作者')
+      showToast(t('author.followed'))
     }
   } catch (error) {
     // 拦截器已提示

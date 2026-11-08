@@ -1,9 +1,9 @@
 <template>
   <div class="follow-page">
-    <van-nav-bar title="我的关注" left-arrow fixed @click-left="goBack" />
+    <van-nav-bar :title="$t('follow.title')" left-arrow fixed @click-left="goBack" />
 
     <div class="panel">
-      <div class="panel-title">关注的作者</div>
+      <div class="panel-title">{{ $t('follow.authorsTitle') }}</div>
       <div v-if="authors.length">
         <div
           v-for="author in authors"
@@ -14,15 +14,15 @@
           <van-icon name="user-o" size="24" class="author-icon" />
           <div class="author-info">
             <div class="author-name">{{ author.name }}</div>
-            <div class="author-meta">{{ author.newsCount }} 条新闻</div>
+            <div class="author-meta">{{ $t('common.newsCount', { count: author.newsCount }) }}</div>
           </div>
           <van-icon name="arrow" class="row-arrow" />
           <van-button size="mini" plain type="primary" @click.stop="unfollow(author.name)">
-            取关
+            {{ $t('follow.unfollow') }}
           </van-button>
         </div>
       </div>
-      <div v-else class="empty-text">还没有关注的作者</div>
+      <div v-else class="empty-text">{{ $t('follow.empty') }}</div>
     </div>
 
     <tab-bar />
@@ -33,6 +33,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 
 import http from '../api/http'
 import TabBar from '../components/TabBar.vue'
@@ -40,6 +41,7 @@ import { useUserStore } from '../store/user'
 
 const router = useRouter()
 const userStore = useUserStore()
+const { t } = useI18n()
 
 const authors = ref([])
 
@@ -54,18 +56,21 @@ const goToAuthor = name => router.push(`/author/${encodeURIComponent(name)}`)
 
 const unfollow = async name => {
   try {
-    await showConfirmDialog({ title: '取消关注', message: `不再关注「${name}」？` })
+    await showConfirmDialog({
+      title: t('follow.confirmTitle'),
+      message: t('follow.confirmMessage', { name })
+    })
   } catch (error) {
     return
   }
   await http.delete('/api/follow', { params: { name } })
   authors.value = authors.value.filter(item => item.name !== name)
-  showToast('已取消关注')
+  showToast(t('follow.unfollowed'))
 }
 
 onMounted(() => {
   if (!userStore.getLoginStatus) {
-    showToast('请先登录')
+    showToast(t('common.loginRequired'))
     router.push('/login')
     return
   }
@@ -102,7 +107,7 @@ onMounted(() => {
 }
 
 .author-icon {
-  color: #1989fa;
+  color: var(--primary-color);
 }
 
 .author-info {
@@ -124,7 +129,7 @@ onMounted(() => {
 }
 
 .row-arrow {
-  color: #c8c9cc;
+  color: var(--icon-color-muted);
   flex-shrink: 0;
 }
 

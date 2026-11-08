@@ -1,22 +1,32 @@
 import { createI18n } from 'vue-i18n';
+import { Locale } from 'vant';
+import vantZhCN from 'vant/es/locale/lang/zh-CN';
+import vantEnUS from 'vant/es/locale/lang/en-US';
 import zhCN from './locales/zh-CN.js';
 import enUS from './locales/en-US.js';
 
-// 创建i18n实例
+// 在模块加载时创建唯一实例。路由标题和路由守卫也需要用它，
+// 每次 setupI18n() 都新建实例会导致这些地方拿到另一份 locale。
+const savedLanguage = localStorage.getItem('language') || 'zh-CN';
+
+// Vant 的 Picker、Dialog、PullRefresh 等组件有一套独立文案。
+// 必须同步切换，否则英文页面里的“取消/确认/下拉刷新”仍会是中文。
+Locale.use(savedLanguage, savedLanguage === 'en-US' ? vantEnUS : vantZhCN);
+
+export const i18n = createI18n({
+  legacy: false,
+  locale: savedLanguage,
+  fallbackLocale: 'zh-CN',
+  messages: {
+    'zh-CN': zhCN,
+    'en-US': enUS
+  }
+});
+
+document.querySelector('html')?.setAttribute('lang', savedLanguage);
+
+// 保留原入口，便于 main.js 继续按组件插件方式安装
 export function setupI18n() {
-  // 在创建i18n实例前获取语言设置
-  const savedLanguage = localStorage.getItem('language') || 'zh-CN';
-  
-  const i18n = createI18n({
-    legacy: false, // 使用组合式API
-    locale: savedLanguage,
-    fallbackLocale: 'zh-CN',
-    messages: {
-      'zh-CN': zhCN,
-      'en-US': enUS
-    }
-  });
-  
   return i18n;
 }
 
