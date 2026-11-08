@@ -135,6 +135,7 @@ async def custom_swagger_ui_html():
         swagger_ui_parameters={"persistAuthorization": True, "displayRequestDuration": True},
     )
 
+
 # uvicorn main:app --reload
 # netstat -ano | findstr :8000
 

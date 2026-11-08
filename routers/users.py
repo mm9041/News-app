@@ -106,9 +106,7 @@ async def get_user_info(user: User = Depends(get_current_user)):
     return success_response(data=UserInfoResponse.model_validate(user), message="获取用户信息成功")
 
 
-async def _update_current_user(
-    user_data: UserUpdateRequest, user: User, db: AsyncSession
-):
+async def _update_current_user(user_data: UserUpdateRequest, user: User, db: AsyncSession):
     updated = await update_user(db, user.username, user_data)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")

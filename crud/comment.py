@@ -23,9 +23,7 @@ async def list_comments(db: AsyncSession, news_id: int, skip: int, limit: int):
     - root_total：只数一级评论，用于 hasMore 判断 —— 分页单位是一级评论，
       拿含回复的 total 去算会把「没有下一页」误判成「还有下一页」
     """
-    total = (
-        await db.execute(select(func.count(NewsComment.id)).where(NewsComment.news_id == news_id))
-    ).scalar_one()
+    total = (await db.execute(select(func.count(NewsComment.id)).where(NewsComment.news_id == news_id))).scalar_one()
     root_total = (
         await db.execute(
             select(func.count(NewsComment.id)).where(NewsComment.news_id == news_id, NewsComment.parent_id.is_(None))

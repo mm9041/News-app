@@ -132,9 +132,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
     if DEBUG_MODE:
         error_data = {"error_type": "IntegrityError", "error_detail": error_msg, "path": str(request.url)}
 
-    return JSONResponse(
-        status_code=status_code, content={"code": status_code, "message": detail, "data": error_data}
-    )
+    return JSONResponse(status_code=status_code, content={"code": status_code, "message": detail, "data": error_data})
 
 
 async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):

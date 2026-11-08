@@ -30,6 +30,7 @@ router = APIRouter(prefix="/api/upload", tags=["upload"])
 class UploadImageResponse(BaseModel):
     url: str
 
+
 UPLOAD_ROOT = Path(__file__).resolve().parent.parent / "uploads"
 MAX_SIZE = 5 * 1024 * 1024  # 5MB
 
