@@ -21,6 +21,7 @@ htmlcov/
 Thumbs.db
 *.pid
 logs/
+.tmp-*
 
 # 前端
 node_modules/

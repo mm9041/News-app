@@ -186,6 +186,9 @@ CREATE TABLE IF NOT EXISTS `ai_chat` (
   INDEX `fk_ai_chat_user_idx` (`user_id` ASC),
   INDEX `idx_created_at` (`created_at` DESC),
   INDEX `idx_user_created` (`user_id` ASC, `created_at` DESC, `id` DESC),
+  -- 必须显式建索引：否则 MySQL 会按约束名 fk_ai_chat_conv 自动建索引，
+  -- 与模型声明的 fk_ai_chat_conv_idx 对不上，check_schema 会报「缺索引 / 多索引」
+  INDEX `fk_ai_chat_conv_idx` (`conversation_id` ASC),
   CONSTRAINT `fk_ai_chat_user`
     FOREIGN KEY (`user_id`)
     REFERENCES `user` (`id`)
